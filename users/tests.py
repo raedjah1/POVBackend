@@ -3,7 +3,6 @@
 from rest_framework.test import APITestCase, APIClient
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
-
 class UserTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='testuser', password='testpassword')
