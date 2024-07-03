@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
-from .models import User, Interest, Spectator, Creator
+from .models import SignInCodeRequest, User, Interest, Spectator, Creator
 
 class InterestSerializer(serializers.ModelSerializer):
     class Meta:
@@ -40,7 +40,7 @@ class CreatorSerializer(serializers.ModelSerializer):
     
     class Meta: 
         model = Creator
-        fields = ['pk', 'user', 'subscription_price', 'subscriber_count']
+        fields = ['pk', 'user', 'subscription_price', 'subscriber_count', 'is_verified']
         read_only_fields = ['pk', 'user', 'subscriber_count']
 
 class SpectatorSerializer(serializers.ModelSerializer):
@@ -52,3 +52,9 @@ class SpectatorSerializer(serializers.ModelSerializer):
         model = Spectator
         fields = ['pk', 'user', 'subscriptions', 'interests', 'liked_visions', 'watch_later', 'liked_comments', 'watch_history']
         read_only_fields = ['liked_visions', 'watch_later', 'liked_comments', 'watch_history']
+
+class SignInCodeRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SignInCodeRequest
+        fields = ['id', 'user', 'status', 'code', 'created_at']
+        read_only_fields = ['id', 'created_at']

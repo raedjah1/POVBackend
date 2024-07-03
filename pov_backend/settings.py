@@ -25,7 +25,10 @@ SECRET_KEY = 'django-insecure--=@&1z!_qy2p)+zj2v8a2!d8bt)i33z%zwnd%kmb4b^7-t7%e1
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    '61f0-50-144-69-94.ngrok-free.app',
+    '127.0.0.1'
+]
 
 
 # Application definition
@@ -43,6 +46,8 @@ INSTALLED_APPS = [
     'subscriptions',
     'videos',
     'payments',
+    'rest_framework',
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
@@ -81,8 +86,12 @@ WSGI_APPLICATION = 'pov_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'povreality',
+        'USER': 'mothusomalunga',
+        'PASSWORD': '',
+        'HOST': 'localhost',  # Set to your database host
+        'PORT': '5432',  # Default PostgreSQL port
     }
 }
 
@@ -127,3 +136,20 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+}
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://61f0-50-144-69-94.ngrok-free.app',
+]
+
+STRIPE_PUBLISHABLE_KEY = 'pk_test_51PXxegE6W84H0thTc1TExROVrY2OSpkHBi7rZ0jVRx2Wf4CZ6Zns0uT8z3U5kYupW3FY7VYKElIWlTNQePCTQVQ400lP3nxLeH'
+STRIPE_SECRET_KEY = 'sk_test_51PXxegE6W84H0thT77tPG2fpn5iAKbgsNoEdLKDjWOxTxNH1HhwO7Ibn8rPM4qR5MPVCSgJzWRUplSCB3qOcgqCN00rmq83bUx'

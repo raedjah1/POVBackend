@@ -1,16 +1,19 @@
 # users/views.py
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from http import HTTPStatus
-from django.db.models import Count
-from .models import User, Interest, Spectator, Creator
-from .serializers import InterestSerializer, UserSerializer, CreatorSerializer, SpectatorSerializer
+from .models import User, Interest, Creator
+from .serializers import InterestSerializer, CreatorSerializer
 import cloudinary.uploader
-
+from django.db.models import Sum, F, ExpressionWrapper, FloatField
+from django.db.models.functions import Coalesce
+from rest_framework.authentication import TokenAuthentication
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def update_profile_picture(request):
     try:
         user = User.objects.get(pk=request.user.pk)
@@ -40,6 +43,8 @@ def interest(request):
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def add_or_remove_interest_from_spectator(request):
     try:
         user = User.objects.get(pk=request.user.pk)
@@ -58,7 +63,7 @@ def add_or_remove_interest_from_spectator(request):
 def search_interests(request):
     try:
         query = request.GET.get('name', '')
-        interests = Interest.objects.filter(name__icontains=query)
+        interests = Interest.objects.filter(name__icontains=query) #TODO Fuzzy Search
         return Response({
             'message': 'Interest found',
             'data': InterestSerializer(interests, many=True).data
@@ -76,3 +81,27 @@ def get_or_create_interests(request):
         return Response({'interests': InterestSerializer(interest_data, many=True).data})
     except Exception as e:
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_popular_creators(request):
+    
+    # Calculate the weighted score for each creator
+    popular_creators = Creator.objects.annotate(
+        total_views=Coalesce(Sum('vision__views'), 0),
+        total_likes=Coalesce(Sum('vision__likes'), 0),
+        weighted_score=ExpressionWrapper(
+            (F('total_views') * 1) +  # Weight for views
+            (F('total_likes') * 3) +  # Weight for likes
+            (F('subscriber_count') * 5),  # Weight for subscribers
+            output_field=FloatField()
+        )
+    ).order_by('-weighted_score')
+
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    results = paginator.paginate_queryset(popular_creators, request)
+
+    serializer = CreatorSerializer(results, many=True)
+    return paginator.get_paginated_response(serializer.data)

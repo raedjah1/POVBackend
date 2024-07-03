@@ -1,9 +1,8 @@
 from datetime import datetime
-from django.shortcuts import render
-# events/views.py
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from http import HTTPStatus
 from django.db.models import Count
 from .models import Event
@@ -11,8 +10,17 @@ from .serializers import EventSerializer
 from videos.models import Vision
 from videos.serializers import VisionSerializer
 from users.models import Creator, Interest, Spectator
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from django.db.models import Count, Q
+from django.utils import timezone
+from .models import Event, Spectator
+from .serializers import EventSerializer
+from django.db.models import Count, Q, Case, When, BooleanField
+from rest_framework.authentication import TokenAuthentication
 
 @api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def get_create_delete_events(request):
     if request.method == 'GET':
         try:
@@ -41,6 +49,8 @@ def get_create_delete_events(request):
             return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT', 'DELETE'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def edit_or_delete_events(request, pk):
     if request.method == 'PUT':
         pass  # Implement editing logic
@@ -55,7 +65,7 @@ def edit_or_delete_events(request, pk):
 @api_view(['POST'])
 def activate_event_livestream(request, pk):
     try:
-        vision = Vision.objects.get(pk=pk)
+        vision = Vision.with_locks.with_is_locked(request.user).get(pk=pk)
         # Implement the MUX API integration for creating a live stream
         # Set the vision's URL to the live stream URL
         vision.save()
@@ -64,6 +74,8 @@ def activate_event_livestream(request, pk):
         return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def get_event_by_creator(request, pk):
     try:
         creator = Creator.objects.get(pk=pk)
@@ -73,6 +85,8 @@ def get_event_by_creator(request, pk):
         return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def get_upcoming_events_by_interests(request):
     try:
         interests = request.GET.getlist('interests')
@@ -83,9 +97,11 @@ def get_upcoming_events_by_interests(request):
         return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-def add_or_remove_from_remind_me_list(request, event_pk, spectator_pk):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def add_or_remove_from_remind_me_list(request, event_pk):
     try:
-        spectator = Spectator.objects.get(pk=spectator_pk)
+        spectator = Spectator.objects.get(user=request.user)
         event = Event.objects.get(pk=event_pk)
         if spectator in event.remind_me_list.all():
             event.remind_me_list.remove(spectator)
@@ -98,10 +114,95 @@ def add_or_remove_from_remind_me_list(request, event_pk, spectator_pk):
         return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-def get_events_from_subscriptions(request, spectator_pk):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_events_from_subscriptions(request):
     try:
-        spectator = Spectator.objects.get(pk=spectator_pk)
+        spectator = Spectator.objects.get(user=request.user)
         events = Event.objects.annotate(num_waiting=Count('remind_me_list')).filter(creator__in=spectator.subscriptions.all()).filter(start_time__gte=datetime.now()).distinct().order_by('-num_waiting')
         return Response({'message': 'Successfully retrieved events', 'data': EventSerializer(events, many=True).data}, status=HTTPStatus.OK)
     except Exception as e:
         return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_recommended_events(request):
+    # Get the current user's spectator object
+    try:
+        spectator = Spectator.objects.get(user=request.user)
+    except Spectator.DoesNotExist:
+        return Response({"error": "Spectator profile not found"}, status=400)
+
+    # Get the user's interests
+    user_interests = spectator.interests.all()
+
+    # Get the creators the user is subscribed to
+    subscribed_creators = spectator.subscriptions.all()
+
+    # Get current datetime
+    now = timezone.now()
+
+    # Query for recommended events
+    recommended_events = Event.objects.filter(
+        Q(vision__interests__in=user_interests) | Q(creator__in=subscribed_creators),
+        start_time__gt=now  # Only future events
+    ).annotate(
+        remind_me_count=Count('remind_me_list'),
+        is_subscribed_creator=Case(
+            When(creator__in=subscribed_creators, then=True),
+            default=False,
+            output_field=BooleanField()
+        )
+    ).order_by('-is_subscribed_creator', '-remind_me_count', 'start_time').distinct()
+
+    # Pagination
+    paginator = PageNumberPagination()
+    paginator.page_size = 10  # You can adjust this number
+    paginated_events = paginator.paginate_queryset(recommended_events, request)
+
+    # Serialize the events
+    serializer = EventSerializer(paginated_events, many=True, context={'user': request.user})
+
+    return paginator.get_paginated_response(serializer.data)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_upcoming_events(request):
+    # Get the current user's spectator object
+    try:
+        spectator = Spectator.objects.get(user=request.user)
+    except Spectator.DoesNotExist:
+        return Response({"error": "Spectator profile not found"}, status=400)
+
+    # Get the user's interests
+    user_interests = spectator.interests.all()
+
+    # Get the creators the user is subscribed to
+    subscribed_creators = spectator.subscriptions.all()
+
+    # Get current datetime
+    now = timezone.now()
+
+    # Query for upcoming events
+    upcoming_events = Event.objects.filter(
+        Q(vision__interests__in=user_interests) | Q(creator__in=subscribed_creators),
+        start_time__gt=now  # Only future events
+    ).annotate(
+        is_subscribed_creator=Case(
+            When(creator__in=subscribed_creators, then=True),
+            default=False,
+            output_field=BooleanField()
+        )
+    ).order_by('-is_subscribed_creator', 'start_time').distinct()
+
+    # Pagination
+    paginator = PageNumberPagination()
+    paginator.page_size = 10  # You can adjust this number
+    paginated_events = paginator.paginate_queryset(upcoming_events, request)
+
+    # Serialize the events
+    serializer = EventSerializer(paginated_events, many=True, context={'user': request.user})
+
+    return paginator.get_paginated_response(serializer.data)

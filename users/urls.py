@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import update_profile_picture, interest, add_or_remove_interest_from_spectator, search_interests, get_or_create_interests
-from .views_auth import create_creator_account, creator_account_detail, get_creator_accounts, create_spectator_account, spectator_account_detail, get_spectator_accounts
+from .views import get_popular_creators, update_profile_picture, interest, add_or_remove_interest_from_spectator, search_interests, get_or_create_interests
+from .views_auth import check_signin_status, create_creator_account, creator_account_detail, get_creator_accounts, create_spectator_account, register_user, send_signin_code, sign_in, spectator_account_detail, get_spectator_accounts
 
 urlpatterns = [
     path('update-profile-picture/', update_profile_picture, name='update_profile_picture'),
@@ -14,4 +14,9 @@ urlpatterns = [
     path('create-spectator-account/', create_spectator_account, name='create_spectator_account'),
     path('spectator-account/', spectator_account_detail, name='spectator_account_detail'),
     path('spectator-accounts/', get_spectator_accounts, name='get_spectator_accounts'),
+    path('popular-creators/', get_popular_creators, name='get_popular_creators'),
+    path('auth/send-signin-code/', send_signin_code, name='send_signin_code'),
+    path('auth/check-signin-status/', check_signin_status, name='check_signin_status'),
+    path('register/', register_user, name='register'),
+    path('sign-in/', sign_in, name='sign_in'),
 ]

@@ -3,22 +3,33 @@ import cloudinary.uploader
 import boto3
 from botocore.client import Config
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from http import HTTPStatus
-from django.db.models import Count, Q
-from .models import Vision, Comment
-from .serializers import VisionSerializer, CommentSerializer
+from django.db.models import Q
+from .models import Vision
+from .serializers import VisionSerializer
 from users.models import Interest, Spectator, Creator
-from datetime import datetime
 import os
+from django.db.models import Count, Q, F, ExpressionWrapper, FloatField, Case, When, Value
+from django.db.models.functions import Cast
+from django.db.models.functions import Cast
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+
+# TODO Nearby Vision, GDAL library
+# from django.contrib.gis.geos import Point
+# from django.contrib.gis.db.models.functions import Distance
+# from django.contrib.gis.measure import D
 
 logger = logging.getLogger(__name__)
 
-# Correct usage in views
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def create_vision(request):
     try:
@@ -40,10 +51,11 @@ def create_vision(request):
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.BAD_REQUEST)
 
 @api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def upload_thumbnail(request, vision_pk):
     try:
-        vision = Vision.objects.get(pk=vision_pk)
+        vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
         thumbnail = request.FILES['thumbnail']
         thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.title}-thumbnail', unique_filename=False, overwrite=True)
         vision.thumbnail = thumbnail_res['secure_url']
@@ -54,11 +66,12 @@ def upload_thumbnail(request, vision_pk):
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT', 'GET'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def update_or_get_vision_info(request, vision_pk):
     if request.method == 'GET':
         try:
-            vision = Vision.objects.get(pk=vision_pk)
+            vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
             return Response({'message': 'Successfully retrieved vision', 'data': VisionSerializer(vision).data})
         except Vision.DoesNotExist:
             return Response({'error': True, 'message': 'Vision not found'}, status=HTTPStatus.NOT_FOUND)
@@ -67,7 +80,7 @@ def update_or_get_vision_info(request, vision_pk):
             return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.BAD_REQUEST)
     elif request.method == 'PUT':
         try:
-            vision = Vision.objects.get(pk=vision_pk)
+            vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
             new_info = VisionSerializer(vision, data=request.data, partial=True)
             if new_info.is_valid():
                 new_info.save()
@@ -81,16 +94,21 @@ def update_or_get_vision_info(request, vision_pk):
             return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_recommended_visions(request):
     try:
-        spectator_interests = Spectator.objects.get(user=request.user).interests.all()
         paginator = PageNumberPagination()
         paginator.page_size = 10
-        if not spectator_interests.exists():
-            visions = Vision.objects.filter(~Q(url=None)).order_by('-created_at', '-likes')
-        else:
-            visions = Vision.objects.filter(interests__in=spectator_interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
+
+        # SImple Version:
+        # user_interests = Spectator.objects.get(user=request.user).interests.all()
+        # if not user_interests.exists():
+        #     visions = Vision.with_locks.with_is_locked(request.user).filter(~Q(url=None)).order_by('-created_at', '-likes')
+        # else:
+        #     visions = Vision.with_locks.with_is_locked(request.user).filter(interests__in=user_interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
+
+        visions = get_recommended_visions_algorithm(request.user)
         results = paginator.paginate_queryset(visions, request)
         return paginator.get_paginated_response(VisionSerializer(results, many=True).data)
     except Exception as e:
@@ -102,7 +120,7 @@ def get_recommended_visions(request):
 def get_visions_by_creator(request, pk):
     try:
         creator = Creator.objects.get(pk=pk)
-        visions = creator.vision_set.filter(~Q(url=None))
+        visions = Vision.with_locks.with_is_locked(request.user).filter(creator=creator).order_by('-created_at')
         paginator = PageNumberPagination()
         paginator.page_size = 10
         results = paginator.paginate_queryset(visions, request)
@@ -112,11 +130,12 @@ def get_visions_by_creator(request, pk):
         return Response({'error': True}, status=HTTPStatus.BAD_REQUEST)
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_visions_by_interest(request):
     try:
         interests = [Interest.objects.get(name=interest_name) for interest_name in request.data['interests']]
-        visions = Vision.objects.filter(interests__in=interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
+        visions = Vision.with_locks.with_is_locked(request.user).filter(interests__in=interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
         paginator = PageNumberPagination()
         paginator.page_size = 10
         results = paginator.paginate_queryset(visions, request)
@@ -126,10 +145,11 @@ def get_visions_by_interest(request):
         return Response({'error': True}, status=HTTPStatus.BAD_REQUEST)
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def like_or_dislike_vision(request, pk):
     try:
-        vision = Vision.objects.get(pk=pk)
+        vision = Vision.with_locks.with_is_locked(request.user).get(pk=pk)
         spectator = Spectator.objects.get(user=request.user)
         if vision in spectator.liked_visions.all():
             vision.likes = max(vision.likes - 1, 0)
@@ -144,3 +164,181 @@ def like_or_dislike_vision(request, pk):
     except Exception as e:
         logger.error(f"Error liking/disliking vision: {e}")
         return Response({'error': True}, status=HTTPStatus.BAD_REQUEST)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def add_to_watch_history(request):
+    vision_id = request.data.get('vision_id')
+    try:
+        vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_id)
+        
+        spectator = Spectator.objects.get(user=request.user)
+        spectator.watch_history.add(vision)
+
+        # Optional: Limit history to last x videos
+        # if spectator.watch_history.count() > 100000:
+        #     oldest = spectator.watch_history.order_by('watch_history__id').first()
+        #     spectator.watch_history.remove(oldest)
+
+        return Response({'message': 'Added to watch history'}, status=status.HTTP_200_OK)
+    except Vision.DoesNotExist:
+        return Response({'error': 'Vision not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_subscription_visions(request):
+    spectator = Spectator.objects.get(user=request.user)
+    subscribed_visions = Vision.with_locks.with_is_locked(request.user).filter(creator__in=spectator.subscriptions.all()).order_by('-created_at')
+    
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    page = paginator.paginate_queryset(subscribed_visions, request)
+    
+    if page is not None:
+        serializer = VisionSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    return Response(None)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_trending_visions(request):
+    # Get visions from the last month
+    one_month_ago = timezone.now() - timedelta(days=30)
+
+    trending_visions = Vision.with_locks.with_is_locked(request.user).filter(created_at__gte=one_month_ago)
+    
+    # Calculate weighted score
+    trending_visions = trending_visions.annotate(
+        comment_count=Count('comment')
+    ).annotate(
+        weighted_score=ExpressionWrapper(
+            (Cast('likes', FloatField()) * 3) +  # Likes have a weight of 3
+            (Cast('comment_count', FloatField()) * 2) +  # Comments have a weight of 2
+            Cast('views', FloatField()),  # Views have a weight of 1
+            output_field=FloatField()
+        )
+    ).order_by('-weighted_score')
+
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    page = paginator.paginate_queryset(trending_visions, request)
+
+    if page is not None:
+        serializer = VisionSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    return Response(None)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_visions_by_creator_category(request, pk, category):
+    try:
+        creator = Creator.objects.get(pk=pk)
+        
+        if category == 'saved':
+            visions = Vision.with_locks.with_is_locked(request.user).filter(creator=creator, is_saved=True)
+        elif category == 'highlights':
+            visions = Vision.with_locks.with_is_locked(request.user).filter(creator=creator, is_highlight=True)
+        elif category == 'forme':
+            if request.user.is_authenticated:
+                visions = Vision.with_locks.with_is_locked(request.user).filter(creator=creator, private_user=request.user)
+            else:
+                visions = Vision.with_locks.with_is_locked(request.user).filter(creator=creator)
+        else:
+            return Response({'error': 'Invalid category'}, status=HTTPStatus.BAD_REQUEST)
+        
+        visions = visions.order_by('-created_at')
+        
+        paginator = PageNumberPagination()
+        paginator.page_size = 10
+        results = paginator.paginate_queryset(visions, request)
+        return paginator.get_paginated_response(VisionSerializer(results, many=True).data)
+    except Creator.DoesNotExist:
+        return Response({'error': 'Creator not found'}, status=HTTPStatus.NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=HTTPStatus.BAD_REQUEST)
+
+def get_recommended_visions_algorithm(user):
+    spectator = Spectator.objects.get(user=user)
+    
+    # Base queryset
+    base_queryset = Vision.with_locks.with_is_locked(user)
+    
+    # User's interests and watch history
+    user_interests = spectator.interests.all()
+    watch_history = spectator.watch_history.all()
+    creators_watched = watch_history.values_list('creator', flat=True).distinct()
+    
+    # Collaborative Filtering
+    liked_visions = spectator.liked_visions.all()
+    similar_users = Spectator.objects.filter(liked_visions__in=liked_visions).distinct().exclude(user=user)
+    
+    # Trending Content timeframe
+    one_month_ago = timezone.now() - timedelta(days=30)
+    
+    recommended = base_queryset.annotate(
+        # Content-Based Scoring
+        interest_match=Count('interests', filter=Q(interests__in=user_interests)),
+        
+        # Collaborative Scoring
+        similar_user_likes=Count('liked_by', filter=Q(liked_by__in=similar_users)),
+        
+        # History-Based Scoring
+        creator_watched=Case(
+            When(creator__in=creators_watched, then=Value(1)),
+            default=Value(0),
+            output_field=FloatField()
+        ),
+        
+        # Recency and Popularity Scoring
+        comment_count=Count('comment'),
+        recency_score=Case(
+            When(created_at__gte=one_month_ago, then=Value(1)),
+            default=Value(0),
+            output_field=FloatField()
+        )
+    ).annotate(
+        relevance_score=ExpressionWrapper(
+            (F('interest_match') * 3) +  # Prioritize content matching user interests
+            (F('similar_user_likes') * 2) +  # Consider similar users' preferences
+            (F('creator_watched') * 1.5) +  # Slight boost for creators user has watched before
+            (F('likes') * 0.5) +  # Consider overall popularity
+            (F('comment_count') * 0.3) +  # Engagement factor
+            (F('views') * 0.1) +  # View count as a minor factor
+            (F('recency_score') * 5),  # Boost for recent content
+            output_field=FloatField()
+        )
+    ).order_by('-relevance_score')
+    
+    return recommended
+
+# TODO Nearby Visions
+# @api_view(['GET'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def get_nearby_visions(request):
+#     # Get user's latitude and longitude from request
+#     user_lat = float(request.GET.get('latitude'))
+#     user_lon = float(request.GET.get('longitude'))
+    
+#     # Create a point based on user's location
+#     user_location = Point(user_lon, user_lat, srid=4326)
+    
+#     # Query for nearby visions
+#     nearby_visions = Vision.with_locks.with_is_locked(request.user).filter(
+#         location__distance_lte=(user_location, D(km=25))  # Within x km radius
+#     ).annotate(
+#         distance=Distance('location', user_location)
+#     ).order_by('distance')
+
+#     paginator = PageNumberPagination()
+#     paginator.page_size = 10
+#     page = paginator.paginate_queryset(nearby_visions, request)
+    
+#     if page is not None:
+#         serializer = VisionSerializer(page, many=True)
+#         return paginator.get_paginated_response(serializer.data)
+#     return Response(None)
