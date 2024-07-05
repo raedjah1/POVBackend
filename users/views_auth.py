@@ -14,6 +14,16 @@ from videos.models import Vision
 from .models import SignInCodeRequest, User, Spectator, Creator
 from .serializers import CreatorSerializer, SpectatorSerializer
 from django.db import IntegrityError
+import os
+import jwt
+import requests
+from django.utils import timezone
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from datetime import datetime, timedelta
+from django.contrib.auth.models import BaseUserManager
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +161,12 @@ def sign_in(request):
     try:
         # Get the user by email
         user = User.objects.get(email=email)
+
+        # Check if the sign-in method is email
+        if user.sign_in_method != 'email':
+            return Response({
+                'error': f'This account uses {user.sign_in_method} for sign in. Please use the appropriate sign-in method.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Authenticate using the username and password
         authenticated_user = authenticate(username=user.username, password=password)
@@ -170,6 +186,199 @@ def sign_in(request):
         return Response({'error': 'User with this email does not exist'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def sign_in_google(request):
+    try:
+        google_token = request.data.get('credential')
+        user_data = id_token.verify_oauth2_token(
+            google_token, google_requests.Request(), os.environ['GOOGLE_OAUTH_CLIENT_ID']
+        )
+    except ValueError:
+        return Response({"error": "Invalid Google token"}, status=status.HTTP_403_FORBIDDEN)
+
+    email = user_data["email"]
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={
+            "username": email,
+            "first_name": user_data.get("given_name"),
+            "last_name": user_data.get("family_name"),
+            "sign_in_method": 'google',
+            "password": BaseUserManager.make_random_password()
+        }
+    )
+
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response({
+        'user_id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'token': token.key
+    }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def sign_in_facebook(request):
+    FACEBOOK_DEBUG_TOKEN_URL = "https://graph.facebook.com/debug_token"
+    FACEBOOK_ACCESS_TOKEN_URL = "https://graph.facebook.com/v7.0/oauth/access_token"
+    FACEBOOK_URL = "https://graph.facebook.com/"
+
+    access_token = request.data.get('access_token')
+    
+    if not access_token:
+        return Response({"error": "Facebook access token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Verify the access token
+        app_id = os.environ.get("FACEBOOK_APP_ID")
+        app_secret = os.environ.get("FACEBOOK_APP_SECRET")
+        
+        # Get app access token
+        app_access_token_params = {
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "grant_type": "client_credentials",
+        }
+        app_access_token_response = requests.get(FACEBOOK_ACCESS_TOKEN_URL, params=app_access_token_params).json()
+        app_access_token = app_access_token_response.get("access_token")
+
+        if not app_access_token:
+            return Response({"error": "Failed to get app access token"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Verify user access token
+        verify_params = {
+            "input_token": access_token,
+            "access_token": app_access_token,
+        }
+        verify_response = requests.get(FACEBOOK_DEBUG_TOKEN_URL, params=verify_params).json()
+
+        if "error" in verify_response or "data" not in verify_response:
+            return Response({"error": "Invalid Facebook token"}, status=status.HTTP_403_FORBIDDEN)
+
+        user_id = verify_response["data"]["user_id"]
+
+        # Get user info
+        user_info_params = {
+            "fields": "id,name,email",
+            "access_token": access_token,
+        }
+        user_info_response = requests.get(f"{FACEBOOK_URL}{user_id}", params=user_info_params).json()
+
+        if "error" in user_info_response or "email" not in user_info_response:
+            return Response({"error": "Failed to get user information"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        email = user_info_response["email"]
+        
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "username": email,
+                "first_name": user_info_response.get("name", "").split()[0],
+                "last_name": " ".join(user_info_response.get("name", "").split()[1:]),
+                "sign_in_method": 'facebook',
+                "password": BaseUserManager.make_random_password()
+            }
+        )
+
+        token, _ = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'user_id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'token': token.key
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def sign_in_apple(request):
+    ACCESS_TOKEN_URL = 'https://appleid.apple.com/auth/token'
+    
+    access_token = request.data.get('access_token')
+    refresh_token = request.data.get('refresh_token')
+    
+    client_id, client_secret = get_apple_key_and_secret()
+    
+    headers = {'content-type': "application/x-www-form-urlencoded"}
+    data = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+    }
+    
+    if refresh_token is None:
+        data['code'] = access_token
+        data['grant_type'] = 'authorization_code'
+    else:
+        data['refresh_token'] = refresh_token
+        data['grant_type'] = 'refresh_token'
+    
+    res = requests.post(ACCESS_TOKEN_URL, data=data, headers=headers)
+    response_dict = res.json()
+    
+    if 'error' not in response_dict:
+        id_token = response_dict.get('id_token', None)
+        refresh_tk = response_dict.get('refresh_token', None)
+        
+        if id_token:
+            decoded = jwt.decode(id_token, '', options={"verify_signature": False})
+            email = decoded.get('email')
+            
+            if email:
+                user, created = User.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        "username": email,
+                        "first_name": email.split('@')[0],
+                        "last_name": email.split('@')[0],
+                        "sign_in_method": 'apple',
+                        "password": BaseUserManager.make_random_password()
+                    }
+                )
+                
+                token, _ = Token.objects.get_or_create(user=user)
+                
+                response_data = {
+                    'user_id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'token': token.key
+                }
+                
+                if refresh_tk:
+                    response_data['refresh_token'] = refresh_tk
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+            
+    return Response({"error": "Invalid Apple token"}, status=status.HTTP_403_FORBIDDEN)
+
+# Helper method
+def get_apple_key_and_secret():
+    AUTH_APPLE_KEY_ID = os.environ.get('AUTH_APPLE_KEY_ID')
+    AUTH_APPLE_TEAM_ID = os.environ.get('AUTH_APPLE_TEAM_ID')
+    AUTH_APPLE_CLIENT_ID = os.environ.get('AUTH_APPLE_CLIENT_ID')
+    AUTH_APPLE_PRIVATE_KEY = os.environ.get('AUTH_APPLE_PRIVATE_KEY')
+
+    headers = {
+        'kid': AUTH_APPLE_KEY_ID,
+        'alg': 'ES256'
+    }
+    payload = {
+        'iss': AUTH_APPLE_TEAM_ID,
+        'iat': timezone.now(),
+        'exp': timezone.now() + timedelta(days=180),
+        'aud': 'https://appleid.apple.com',
+        'sub': AUTH_APPLE_CLIENT_ID,
+    }
+    client_secret = jwt.encode(
+        payload, AUTH_APPLE_PRIVATE_KEY, algorithm="ES256", headers=headers
+    )
+    return AUTH_APPLE_CLIENT_ID, client_secret
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

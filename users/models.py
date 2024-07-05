@@ -13,6 +13,16 @@ class User(User):
     )
     is_spectator = models.BooleanField(default=False)
     is_creator = models.BooleanField(default=False)
+    sign_in_method = models.CharField(
+        max_length=10,
+        choices=[
+            ('apple', 'Apple'),
+            ('google', 'Google'), 
+            ('facebook', 'Facebook'),
+            ('email', 'Email')
+        ],
+        default='email'
+    )
 
     def __str__(self):
         return self.username

@@ -5,11 +5,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from http import HTTPStatus
 from .models import User, Interest, Creator
-from .serializers import InterestSerializer, CreatorSerializer
+from .serializers import InterestSerializer, CreatorSerializer, UserSerializer
 import cloudinary.uploader
 from django.db.models import Sum, F, ExpressionWrapper, FloatField
 from django.db.models.functions import Coalesce
 from rest_framework.authentication import TokenAuthentication
+from rest_framework import status
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -24,6 +25,37 @@ def update_profile_picture(request):
         return Response({'message': 'Profile picture updated successfully', 'profile_picture': user.profile_picture_url})
     except Exception as e:
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def update_user_details(request):
+    user = User.objects.get(pk=request.user.pk)
+    
+    # Get the data from the request
+    username = request.data.get('username')
+    first_name = request.data.get('first_name')
+    last_name = request.data.get('last_name')
+
+    # Update the fields if they are provided
+    if username:
+        # Check if the username is already taken
+        if User.objects.filter(username=username).exclude(id=user.id).exists():
+            return Response({"error": "This username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+        user.username = username
+
+    if first_name:
+        user.first_name = first_name
+
+    if last_name:
+        user.last_name = last_name
+
+    try:
+        user.save()
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

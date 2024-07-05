@@ -1,4 +1,4 @@
-#!/Users/raedjah/pov_backend/venv/bin/python3.10
+#!/Users/mothusomalunga/dev/python-projects/POVBackend/venv/bin/python3
 
 import sys
 import json

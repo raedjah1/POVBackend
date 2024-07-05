@@ -30,7 +30,6 @@ ALLOWED_HOSTS = [
     '127.0.0.1'
 ]
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -87,10 +86,11 @@ WSGI_APPLICATION = 'pov_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'povreality',
-        'USER': 'mothusomalunga',
-        'PASSWORD': '',
-        'HOST': 'localhost',  # Set to your database host
+        'NAME': 'povreality-db',
+        'USER': 'pov_admin',
+        'PASSWORD': 'pov123##', # TODO Environment Variable
+        'HOST': 'povreality-db.c5w2y68oebgn.eu-west-2.rds.amazonaws.com', 
+        # 'HOST': 'localhost',  # For Testing Only
         'PORT': '5432',  # Default PostgreSQL port
     }
 }
@@ -150,6 +150,3 @@ REST_FRAMEWORK = {
 CSRF_TRUSTED_ORIGINS = [
     'https://61f0-50-144-69-94.ngrok-free.app',
 ]
-
-STRIPE_PUBLISHABLE_KEY = 'pk_test_51PXxegE6W84H0thTc1TExROVrY2OSpkHBi7rZ0jVRx2Wf4CZ6Zns0uT8z3U5kYupW3FY7VYKElIWlTNQePCTQVQ400lP3nxLeH'
-STRIPE_SECRET_KEY = 'sk_test_51PXxegE6W84H0thT77tPG2fpn5iAKbgsNoEdLKDjWOxTxNH1HhwO7Ibn8rPM4qR5MPVCSgJzWRUplSCB3qOcgqCN00rmq83bUx'

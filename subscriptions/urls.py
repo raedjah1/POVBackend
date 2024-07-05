@@ -8,4 +8,5 @@ urlpatterns = [
     path('subscribed-creators/', get_subscribed_creators, name='get_subscribed_creators'),
     path('subscription-status/<int:creator_id>/', check_subscription_status, name='check_subscription_status'),
     path('unsubscribe/<int:pk>/', unsubscribe, name='unsubscribe'),
+    # path('add-card-test/', add_card_test, name='add_card_test'), # For Testing Only
 ]
