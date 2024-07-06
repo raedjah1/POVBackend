@@ -87,11 +87,11 @@ WSGI_APPLICATION = 'pov_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'povreality',
+        'NAME': 'postgres',
         'USER': 'postgres',
         'PASSWORD': 'pov123###', # TODO Environment Variable
-        'HOST': 'povreality.c5w2y68oebgn.eu-west-2.rds.amazonaws.com', 
-        'HOST': 'localhost',  # For Testing Only
+        'HOST': 'povrealitydb.c5w2y68oebgn.eu-west-2.rds.amazonaws.com', 
+        # 'HOST': 'localhost',  # For Testing Only
         'PORT': '5432',  # Default PostgreSQL port
     }
 }
