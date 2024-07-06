@@ -28,7 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     '61f0-50-144-69-94.ngrok-free.app',
     '127.0.0.1',
-    'povreality-backend-env.eba-rgfmtutf.eu-west-2.elasticbeanstalk.com'
+    'povreality-dev.eba-rgfmtutf.eu-west-2.elasticbeanstalk.com'
 ]
 
 # Application definition
