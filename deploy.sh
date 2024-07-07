@@ -21,7 +21,12 @@ check_vpc_setup() {
     IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query 'InternetGateways[0].InternetGatewayId' --output text)
     
     # Check if a route to 0.0.0.0/0 exists in the route table associated with the subnet
-    ROUTE_TABLE_ID=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query 'RouteTables[0].RouteTableId' --output text)
+    ROUTE_TABLE_ID=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query 'RouteTables[0].RouteTableId' --output text)
+
+    if [ -z "$ROUTE_TABLE_ID" ]; then
+        return 1
+    fi
+
     ROUTE_EXISTS=$(aws ec2 describe-route-tables --route-table-id $ROUTE_TABLE_ID --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`]' --output text)
 
     if [ -n "$IGW_ID" ] && [ -n "$ROUTE_EXISTS" ]; then
@@ -51,11 +56,15 @@ setup_vpc() {
         aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway-id $IGW_ID
     fi
 
+    ROUTE_TABLE_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID --query 'RouteTable.RouteTableId' --output text)
+
     # Create a route table and associate it with the subnet if not exists
     if [ -z "$ROUTE_TABLE_ID" ]; then
-        ROUTE_TABLE_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID --query 'RouteTable.RouteTableId' --output text)
         aws ec2 associate-route-table --route-table-id $ROUTE_TABLE_ID --subnet-id $SUBNET_ID
     fi
+
+    # Check if the route to the internet gateway exists
+    ROUTE_EXISTS=$(aws ec2 describe-route-tables --route-table-id $ROUTE_TABLE_ID --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId' --output text)
 
     # Add a route to the internet gateway if not exists
     if [ -z "$ROUTE_EXISTS" ]; then
@@ -101,15 +110,32 @@ apply_env_config() {
 update_eb_environments() {
     echo "Updating Elastic Beanstalk environments..."
 
+    # List existing environments
+    existing_envs=$(eb list)
+
     # Backend Environment
     apply_env_config "backend"
-    eb use pov-backend-env
+    if echo "$existing_envs" | grep -q "pov-backend-env"; then
+        echo "Backend environment exists. Using and deploying..."
+        eb use pov-backend-env
+    else
+        echo "Backend environment does not exist. Creating..."
+        eb create pov-backend-env --cname pov-backend-env --envvars "ENVIRONMENT=backend"
+    fi
+
     eb deploy
     rm .ebextensions/04_autoscaling.config  # Clean up
 
     # Streaming Environment
     apply_env_config "streaming"
-    eb use pov-streaming-env
+    if echo "$existing_envs" | grep -q "pov-streaming-env"; then
+        echo "Streaming environment exists. Using and deploying..."
+        eb use pov-streaming-env
+    else
+        echo "Streaming environment does not exist. Creating..."
+        eb create pov-streaming-env --cname pov-streaming-env --envvars "ENVIRONMENT=streaming"
+    fi
+    
     eb deploy
     rm .ebextensions/04_autoscaling.config  # Clean up
 
