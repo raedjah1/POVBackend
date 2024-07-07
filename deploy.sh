@@ -115,25 +115,25 @@ update_eb_environments() {
 
     # Backend Environment
     apply_env_config "backend"
-    if echo "$existing_envs" | grep -q "povreality-backend-test"; then
+    if echo "$existing_envs" | grep -q "pov-backend-dev"; then
         echo "Backend environment exists. Using and deploying..."
-        eb use povreality-backend-test
+        eb use pov-backend-dev
     else
         echo "Backend environment does not exist. Creating..."
-        eb create povreality-backend-test --cname povreality-backend-test --envvars "ENVIRONMENT=backend"
+        eb create pov-backend-dev --cname pov-backend-dev --envvars "ENVIRONMENT=backend"
     fi
 
     eb deploy
     rm .ebextensions/04_autoscaling.config  # Clean up
 
     # Streaming Environment
-    apply_env_config "streaming-test"
-    if echo "$existing_envs" | grep -q "povreality-streaming-test"; then
+    apply_env_config "streaming"
+    if echo "$existing_envs" | grep -q "pov-streaming-dev"; then
         echo "Streaming environment exists. Using and deploying..."
-        eb use povreality-streaming-test
+        eb use pov-streaming-dev
     else
         echo "Streaming environment does not exist. Creating..."
-        eb create povreality-streaming-test --cname povreality-streaming-test --envvars "ENVIRONMENT=streaming"
+        eb create pov-streaming-dev --cname pov-streaming-dev --envvars "ENVIRONMENT=streaming"
     fi
 
     eb deploy
@@ -174,7 +174,7 @@ configure_security_groups() {
 # Main execution
 echo "Starting deployment process..."
 
-setup_vpc
+# setup_vpc
 build_and_push_backend
 update_eb_environments
 # configure_security_groups
