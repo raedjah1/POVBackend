@@ -115,27 +115,27 @@ update_eb_environments() {
 
     # Backend Environment
     apply_env_config "backend"
-    if echo "$existing_envs" | grep -q "pov-backend-env"; then
+    if echo "$existing_envs" | grep -q "povreality-backend-test"; then
         echo "Backend environment exists. Using and deploying..."
-        eb use pov-backend-env
+        eb use povreality-backend-test
     else
         echo "Backend environment does not exist. Creating..."
-        eb create pov-backend-env --cname pov-backend-env --envvars "ENVIRONMENT=backend"
+        eb create povreality-backend-test --cname povreality-backend-test --envvars "ENVIRONMENT=backend"
     fi
 
     eb deploy
     rm .ebextensions/04_autoscaling.config  # Clean up
 
     # Streaming Environment
-    apply_env_config "streaming"
-    if echo "$existing_envs" | grep -q "pov-streaming-env"; then
+    apply_env_config "streaming-test"
+    if echo "$existing_envs" | grep -q "povreality-streaming-test"; then
         echo "Streaming environment exists. Using and deploying..."
-        eb use pov-streaming-env
+        eb use povreality-streaming-test
     else
         echo "Streaming environment does not exist. Creating..."
-        eb create pov-streaming-env --cname pov-streaming-env --envvars "ENVIRONMENT=streaming"
+        eb create povreality-streaming-test --cname povreality-streaming-test --envvars "ENVIRONMENT=streaming"
     fi
-    
+
     eb deploy
     rm .ebextensions/04_autoscaling.config  # Clean up
 
@@ -147,15 +147,15 @@ configure_security_groups() {
     echo "Configuring security groups..."
 
     # Create security group for backend if it doesn't exist
-    BACKEND_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=pov-backend-sg Name=vpc-id,Values=$VPC_ID --query 'SecurityGroups[0].GroupId' --output text)
+    BACKEND_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=povreality-backend-sg Name=vpc-id,Values=$VPC_ID --query 'SecurityGroups[0].GroupId' --output text)
     if [ "$BACKEND_SG_ID" == "None" ]; then
-        BACKEND_SG_ID=$(aws ec2 create-security-group --group-name pov-backend-sg --description "Security group for POV backend" --vpc-id $VPC_ID --query 'GroupId' --output text)
+        BACKEND_SG_ID=$(aws ec2 create-security-group --group-name povreality-backend-sg --description "Security group for POV backend" --vpc-id $VPC_ID --query 'GroupId' --output text)
     fi
 
     # Create security group for streaming if it doesn't exist
-    STREAMING_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=pov-streaming-sg Name=vpc-id,Values=$VPC_ID --query 'SecurityGroups[0].GroupId' --output text)
+    STREAMING_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=povreality-streaming-sg Name=vpc-id,Values=$VPC_ID --query 'SecurityGroups[0].GroupId' --output text)
     if [ "$STREAMING_SG_ID" == "None" ]; then
-        STREAMING_SG_ID=$(aws ec2 create-security-group --group-name pov-streaming-sg --description "Security group for POV streaming" --vpc-id $VPC_ID --query 'GroupId' --output text)
+        STREAMING_SG_ID=$(aws ec2 create-security-group --group-name povreality-streaming-sg --description "Security group for POV streaming" --vpc-id $VPC_ID --query 'GroupId' --output text)
     fi
 
     # Allow inbound traffic between the security groups
@@ -177,6 +177,6 @@ echo "Starting deployment process..."
 setup_vpc
 build_and_push_backend
 update_eb_environments
-configure_security_groups
+# configure_security_groups
 
 echo "Deployment process completed successfully."
