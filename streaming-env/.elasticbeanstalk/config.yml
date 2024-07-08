@@ -13,7 +13,7 @@ global:
   application_name: povreality-test
   branch: null
   default_ec2_keyname: aws-eb
-  default_platform: Docker
+  default_platform: Docker running on 64bit Amazon Linux 2
   default_region: us-east-2
   include_git_submodules: true
   instance_profile: null
