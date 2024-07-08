@@ -24,19 +24,18 @@ deploy_environment() {
         eb create $env_name --platform "$platform" --region $REGION
     else
         echo "Deploying to existing environment $env_name..."
+        eb use $env_name
         eb deploy $env_name
     fi
 }
 
 # Deploy Backend Environment
 echo "Deploying Backend Environment..."
-eb init -p python pov-backend --region $REGION
 deploy_environment "pov-backend" "Python 3.9 running on 64bit Amazon Linux 2023"
 
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."
 cd streaming-env
-eb init -p docker pov-streaming --region $REGION
 deploy_environment "pov-streaming" "Docker running on 64bit Amazon Linux 2"
 cd ../
 
