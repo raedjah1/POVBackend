@@ -7,7 +7,7 @@ environment-defaults:
     branch: null
     repository: null
 global:
-  application_name: pov-backend
+  application_name: povreality-test
   branch: null
   default_ec2_keyname: aws-eb
   default_platform: Python 3.11
