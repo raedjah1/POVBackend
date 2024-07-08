@@ -28,7 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     '61f0-50-144-69-94.ngrok-free.app',
     '127.0.0.1',
-    'pov-backend.eba-c6mymbbc.us-east-2.elasticbeanstalk.com',
+    'pov-backend.eba-wizj9tq9.us-east-2.elasticbeanstalk.com',
     '0.0.0.0',
 ]
 
