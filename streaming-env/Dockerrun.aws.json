@@ -1,9 +1,17 @@
 {
-    "AWSEBDockerrunVersion": "1",
-    "Volumes": [],
-    "Ports": [
+    "AWSEBDockerrunVersion": "2",
+    "containerDefinitions": [
       {
-        "ContainerPort": "80"
+        "name": "health-check-proxy",
+        "image": "health-check-proxy:latest",
+        "essential": true,
+        "memory": 128,
+        "portMappings": [
+          {
+            "hostPort": 8080,
+            "containerPort": 8080
+          }
+        ]
       }
     ]
-}
+  }
