@@ -1,0 +1,25 @@
+branch-defaults:
+  default:
+    environment: pov-streaming
+    group_suffix: null
+environment-defaults:
+  backend-dev:
+    branch: null
+    repository: null
+  pov-streaming:
+    branch: null
+    repository: null
+global:
+  application_name: povreality-test
+  branch: null
+  default_ec2_keyname: aws-eb
+  default_platform: Docker
+  default_region: us-east-2
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: null
+  repository: null
+  sc: null
+  workspace_type: Application
