@@ -28,16 +28,16 @@ deploy_environment() {
     fi
 }
 
+# Deploy Backend Environment
+echo "Deploying Backend Environment..."
+eb init -p python pov-backend --region $REGION
+deploy_environment "pov-backend" "Python 3.9 running on 64bit Amazon Linux 2023"
+
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."
 cd streaming-env
 eb init -p docker pov-streaming --region $REGION
 deploy_environment "pov-streaming" "Docker running on 64bit Amazon Linux 2"
 cd ../
-
-# Deploy Backend Environment
-echo "Deploying Backend Environment..."
-eb init -p python pov-backend --region $REGION
-deploy_environment "pov-backend" "Python 3.9 running on 64bit Amazon Linux 2023"
 
 echo "Deployment process completed successfully."
