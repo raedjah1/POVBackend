@@ -9,7 +9,6 @@ class User(AbstractUser):
     )
     is_spectator = models.BooleanField(default=False)
     is_creator = models.BooleanField(default=False)
-    interests = models.ManyToManyField('Interest', blank=True)
 
     groups = models.ManyToManyField(
         'auth.Group',
@@ -37,6 +36,7 @@ class Interest(models.Model):
 
 class Spectator(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    interests = models.ManyToManyField('Interest', blank=True)
     subscriptions = models.ManyToManyField('Creator', blank=True)
     liked_visions = models.ManyToManyField('videos.Vision', blank=True, related_name='liked_by')
     watch_later = models.ManyToManyField('videos.Vision', blank=True, related_name='watch_later_by')
