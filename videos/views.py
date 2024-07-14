@@ -150,3 +150,26 @@ def like_or_dislike_vision(request, pk):
     except Exception as e:
         logger.error(f"Error liking/disliking vision: {e}")
         return Response({'error': True}, status=HTTPStatus.BAD_REQUEST)
+
+@api_view(['GET'])
+def get_recommended_visions_from_subs(request):
+    spectatorSubs = Spectator.objects.get(user = request.user).subscriptions.all()
+    try:
+        
+        paginator = PageNumberPagination()
+        paginator.page_size = 10
+        visions  = Vision.objects.filter(creator__in = spectatorSubs).filter(~models.Q(url = None)).distinct().order_by('-created_at', '-likes')
+        results = paginator.paginate_queryset(visions, request)
+        serializedVisions = VisionSerializer(results, many=True)
+        return Response({
+            'message': 'successfully retrieved visions', 
+            'data': serializedVisions.data, 
+            'size': len(visions),
+            'next': paginator.get_next_link(), 
+            'prev': paginator.get_previous_link()
+            })
+    except Exception as e:
+        print(e)
+        return Response({
+            'error': True
+        }, status=HTTPStatus.BAD_REQUEST)  
