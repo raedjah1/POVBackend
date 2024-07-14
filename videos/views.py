@@ -50,7 +50,7 @@ def create_vision(request):
 def upload_thumbnail(request, vision_pk):
     try:
         vision = Vision.objects.get(pk=vision_pk)
-        thumbnail = request.FILES['thumbnail']
+        thumbnail = request.FILES['_thumbnail']
         thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.title}-thumbnail', unique_filename=False, overwrite=True)
         vision.thumbnail = thumbnail_res['secure_url']
         vision.save()
