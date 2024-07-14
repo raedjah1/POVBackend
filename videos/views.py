@@ -15,6 +15,12 @@ from users.models import Interest, Spectator, Creator
 from datetime import datetime
 import os
 
+config = cloudinary.config(
+    cloud_name = 'pov', 
+    api_key = os.getenv('CLOUDINARY_API_KEY'), 
+    api_secret = os.getenv('CLOUDINARY_API_SECRET'),
+    secure=True)
+
 logger = logging.getLogger(__name__)
 
 # Correct usage in views
