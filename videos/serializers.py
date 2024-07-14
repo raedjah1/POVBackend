@@ -13,8 +13,8 @@ class VisionSerializer(serializers.ModelSerializer):
     
     class Meta: 
         model = Vision
-        fields = ['pk', 'title', 'thumbnail', 'description', 'views', 'url', 'creator', 'likes', 'interests', 'live', 'aspect_ratio', 'created_at', 'updated_at']
-        read_only_fields = ['creator', 'likes', 'created_at', 'updated_at']
+        fields = ['pk', 'title', 'thumbnail', 'description', 'views', 'url', 'creator', 'likes', 'interests', 'live', 'aspect_ratio', 'created_at']
+        read_only_fields = ['creator', 'likes', 'created_at',]
 
     def get_creator(self, obj):
         return CreatorSerializer(obj.creator).data
