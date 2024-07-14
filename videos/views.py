@@ -158,7 +158,7 @@ def get_recommended_visions_from_subs(request):
         
         paginator = PageNumberPagination()
         paginator.page_size = 10
-        visions  = Vision.objects.filter(creator__in = spectatorSubs).filter(~models.Q(url = None)).distinct().order_by('-created_at', '-likes')
+        visions  = Vision.objects.filter(creator__in = spectatorSubs).filter(~Q(url = None)).distinct().order_by('-created_at', '-likes')
         results = paginator.paginate_queryset(visions, request)
         serializedVisions = VisionSerializer(results, many=True)
         return Response({
