@@ -23,9 +23,9 @@ class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(required=False)
     vision = serializers.PrimaryKeyRelatedField(queryset=Vision.objects.all())
     initial_comment = serializers.PrimaryKeyRelatedField(queryset=Comment.objects.all(), required=False, allow_null=True)
-    reply_user = serializers.SlugRelatedField(slug_field='username', queryset=User.objects.all(), required=False, allow_null=True)
+    #reply_user = serializers.SlugRelatedField(slug_field='username', queryset=User.objects.all(), required=False, allow_null=True)
     
     class Meta: 
         model = Comment
-        fields = ['pk', 'user', 'likes', 'vision', 'initial_comment', 'text', 'reply_user', 'created_at']
+        fields = ['pk', 'user', 'likes', 'vision', 'initial_comment', 'text', 'created_at']
         read_only_fields = ['user', 'created_at']

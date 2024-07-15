@@ -11,9 +11,10 @@ from http import HTTPStatus
 from django.db.models import Count, Q
 from .models import Vision, Comment
 from .serializers import VisionSerializer, CommentSerializer
-from users.models import Interest, Spectator, Creator
+from users.models import Interest, Spectator, Creator, User
 from datetime import datetime
 import os
+import mux_python
 
 config = cloudinary.config(
     cloud_name = 'pov', 
@@ -173,3 +174,279 @@ def get_recommended_visions_from_subs(request):
         return Response({
             'error': True
         }, status=HTTPStatus.BAD_REQUEST)  
+
+@api_view(['GET'])
+def get_watch_later(request):
+    try:
+        spectator = Spectator.objects.get(user = request.user)
+        visions = VisionSerializer(spectator.watch_later.all(), many=True)
+        return Response({
+            'message': 'successfully retrieved watch later', 
+            'data': visions.data
+        })
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })  
+    
+@api_view(['POST'])
+def add_to_watch_later(request, vision_pk):
+    try:
+        vision = Vision.objects.get(pk = vision_pk)
+        spectator = Spectator.objects.get(user = request.user)
+        spectator.watch_later.add(vision)
+        return Response({
+            'message': 'Successfully added to watch later'
+        })
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })
+
+@api_view(['POST'])
+def remove_from_watch_later(request, vision_pk):
+    try:
+        vision = Vision.objects.get(pk = vision_pk)
+        spectator = Spectator.objects.get(user = request.user)
+        spectator.watch_later.remove(vision)
+        return Response({
+            'message': 'Successfully removed from watch later'
+        })
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })
+    
+@api_view(['GET'])
+def get_watch_history(request):
+    try:
+        spectator = Spectator.objects.get(user = request.user)
+        visions = VisionSerializer(spectator.watch_history.all(), many=True)
+        return Response({
+            'message': 'successfully retrieved watch later', 
+            'data': visions.data
+        })
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })  
+
+@api_view(['POST'])
+def add_to_watch_history(request, vision_pk):
+    try:
+        spectator = Spectator.objects.get(user = request.user)
+        if spectator.watch_history.filter(pk = vision_pk).count() > 0:
+            vision = Vision.objects.get(pk = vision_pk)
+            spectator.watch_history.remove(vision)
+            spectator.watch_history.add(vision)
+        else:
+            vision = Vision.objects.get(pk = vision_pk)
+            spectator.watch_history.add(vision)
+        return Response({
+            'message': 'Successfully added to watch History'
+        }, HTTPStatus.OK)
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })  
+
+@api_view(['POST'])
+def remove_from_watch_history(request, vision_pk):
+    try:
+        spectator = Spectator.objects.get(user = request.user)
+        vision = Vision.objects.get(pk = vision_pk)
+        spectator.watch_history.remove(vision)
+        return Response({
+            'message': 'Successfully removed from watch History'
+        }, HTTPStatus.OK)
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })  
+
+@api_view(['POST'])
+def clear_watch_history(request):
+    try:
+        spectator = Spectator.objects.get(user = request.user)
+        spectator.watch_history.clear()
+        return Response({
+            'message': 'Successfully cleared watch history!'
+        }, HTTPStatus.OK)
+    except Exception as e: 
+        print(e)
+        return Response({
+            'error': True, 
+        })  
+
+@api_view(['POST'])
+def post_comment(request):
+    try:
+        commentSerializer = CommentSerializer(data = request.data)
+        if commentSerializer.is_valid():
+            commentObj = commentSerializer.save()
+            commentObj.user = User.objects.get(pk = request.user.pk)
+            commentObj.save()
+            return Response({
+                'message': 'Comment Successfully posted!', 
+                'data': commentSerializer.data
+            }, status = HTTPStatus.CREATED)
+        else:
+            print(commentSerializer.errors)
+    except Exception as e:
+        print(e)
+        return Response({
+            'error': True, 
+            'message': 'There was an error adding the comment'
+        })
+
+@api_view(['GET'])
+def get_comments(request, vision_id):
+    try:
+        vision = Vision.objects.get(pk = vision_id)
+        comments = CommentSerializer(vision.comment_set.all().filter(initial_comment = None).order_by('-likes', '-created_at'), many=True)
+        return Response({
+            'message': 'Comments Successfully retrieved!',
+             'data': comments.data
+        }, status = HTTPStatus.OK)
+    except Exception as e:
+        print(e)
+        return Response({
+            'error': True, 
+            'message': 'There was an error'
+        })
+
+# @api_view(['GET'])
+# def get_comment_replies(request, comment_id):
+#     try:
+#         initial_comment = Comment.objects.get(pk = comment_id)
+#         comment_replies  = CommentSerializer(initial_comment.comment_set.all().order_by('-likes', '-created_at'), many=True)
+#         return Response({
+#             'message': 'Comment Replies retrieved successfully!',
+#             'data': comment_replies.data
+#         }, status = HTTPStatus.OK)
+#     except Exception as e:
+#         print(e)
+#         return Response({
+#             'error': True, 
+#             'message': 'There was an error'
+#         })
+
+
+@api_view(['DELETE', 'POST'])
+def delete_or_like_or_dislike_comment(request, comment_id):
+    if request.method == 'DELETE':
+        try:
+            comment = Comment.objects.get(pk = comment_id)
+            comment.delete()
+            return Response({
+                'message':'Comment Deleted Successfully!'
+            })
+        except Exception as e:
+            print(e)
+            return Response({
+                'error': True, 
+                'message': 'There was an error'
+            })
+    elif request.method == 'POST':
+        try:
+            comment = Comment.objects.get(pk = comment_id)
+            spectator = Spectator.objects.get(user = request.user)
+            if comment in spectator.liked_comments.all():
+                comment.likes -= 1
+                spectator.liked_comments.remove(comment)
+                comment.save()
+                spectator.save()
+                return Response({
+                    'message': 'Comment disliked'
+                })
+            else:
+                comment.likes+=1
+                spectator.liked_comments.add(comment)
+                comment.save()
+                spectator.save()
+                return Response({
+                    'message': 'Comment liked'
+                })
+        except Exception as e:
+            print(e)
+            return Response({
+                'error': True, 
+                'message': 'There was an error'
+            })
+
+
+@api_view(['POST'])
+def create_livestream_vision(request):
+    pass
+    # try:
+    #     visionData = VisionSerializer(data= request.data)
+    #     if visionData.is_valid():
+    #         vision = visionData.save()
+    #         live_api = mux_python.LiveStreamsApi(mux_python.ApiClient(configuration=configuration))
+    #         new_asset_settings = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC])
+    #         create_livestream_request = mux_python.CreateLiveStreamRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC], new_asset_settings=new_asset_settings)
+    #         create_livestream_response = live_api.create_live_stream(create_livestream_request)
+    #         print(create_livestream_response.data.id)
+    #         data = {
+    #             'id': create_livestream_response.data.id, 
+    #             'stream_key': create_livestream_response.data.stream_key,
+    #             "status": create_livestream_response.data.status,
+    #             "playback_ids": [{
+    #                 "policy": create_livestream_response.data.playback_ids[0].policy,
+    #                 "id": create_livestream_response.data.playback_ids[0].id
+    #             }],
+    #             "created_at": create_livestream_response.data.created_at
+    #         }
+    #         creator = Creator.objects.get(user = request.user)
+    #         vision.creator = creator
+    #         vision.url = f'https://stream.mux.com/{data["playback_ids"][0]["id"]}.m3u8'
+    #         vision.save()
+        
+    #         return Response({
+    #             'message': 'Live stream created', 
+    #             'livestream_data': data,
+    #             'id': vision.pk
+    #         })
+    # except Exception as e:
+    #     print(e)
+    #     return Response({
+    #         'messaage': 'error!'
+    #     }, status=HTTPStatus.BAD_REQUEST)
+
+@api_view(['DELETE'])
+def delete_vision(request, pk):
+    try:
+        vision = Vision.objects.get(pk = pk)
+        vision.delete()
+        return Response({
+            'message': 'Vision Deleted Successfully'
+        })
+    except Exception as e:
+        print(e)
+        return Response({
+            'messaage': 'error!'
+        }, status=HTTPStatus.BAD_REQUEST)
+
+@api_view(['GET'])
+def search_visions(request):
+    try:
+        query = request.GET.get('search', '')
+        visions = Vision.objects.filter(title__icontains = query)
+        serializedVisions = VisionSerializer(visions, many = True)
+        return Response({
+            'message': 'Successfully retrieved visions',
+            'data': serializedVisions.data
+        }, HTTPStatus.OK)
+    except Exception as e:
+        print(e)
+        response = {
+            'message': e,
+            'error': True
+        }
+        return Response(response, status = HTTPStatus.INTERNAL_SERVER_ERROR)

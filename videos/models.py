@@ -22,7 +22,7 @@ class Comment(models.Model):
     vision = models.ForeignKey(Vision, on_delete=models.CASCADE)
     text = models.TextField()
     likes = models.IntegerField(default=0)
-    parent_comment = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    #parent_comment = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
