@@ -10,20 +10,20 @@ urlpatterns = [
     path('visions-by-interest/', get_visions_by_interest, name='get_visions_by_interest'),
     path('like-dislike-vision/<int:pk>/', like_or_dislike_vision, name='like_or_dislike_vision'),
     path('visions-from-subs/', get_recommended_visions_from_subs, name='get_recommended_visions_from_subs'),
-    path('delete-vision/', delete_vision, name='delete_vision'),
+    path('delete-vision/<int:pk>/', delete_vision, name='delete_vision'),
     path('search/', search_visions, name='search_visions'),
 
     path('watch_later/', get_watch_later, name='get_watch_later'),
-    path('watch_later/add/', add_to_watch_later, name='add_to_watch_later'),
-    path('watch_later/remove/', remove_from_watch_later, name='remove_from_watch_later'), 
+    path('watch_later/add/<int:vision_pk>/', add_to_watch_later, name='add_to_watch_later'),
+    path('watch_later/remove/<int:vision_pk>/', remove_from_watch_later, name='remove_from_watch_later'), 
     path('history/', get_watch_history, name='get_watch_history'), 
-    path('history/add/', add_to_watch_history, name='add_to_watch_history'), 
-    path('history/remove/', remove_from_watch_history, name= 'remove_from_watch_history'), 
+    path('history/add/<int:vision_pk>/', add_to_watch_history, name='add_to_watch_history'), 
+    path('history/remove/<int:vision_pk>/', remove_from_watch_history, name= 'remove_from_watch_history'), 
     path('history/clear/', clear_watch_history, name='clear_watch_history'), 
 
-    path('comment/<int:vision_id>', get_comments, name='get_comments'), 
+    path('comment/<int:vision_id>/', get_comments, name='get_comments'), 
     path('comment/', post_comment, name='post_comment'), 
-    path('comment/delete-like-dislike/', delete_or_like_or_dislike_comment, name='delete_or_like_or_dislike_comment'), 
+    path('comment/delete-like-dislike/<int:comment_id>/', delete_or_like_or_dislike_comment, name='delete_or_like_or_dislike_comment'), 
     
 
 ]
