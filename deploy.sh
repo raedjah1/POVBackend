@@ -31,12 +31,12 @@ deploy_environment() {
 
 # Deploy Backend Environment
 echo "Deploying Backend Environment..."
-deploy_environment "mypovreality-backend-test" "Python 3.9 running on 64bit Amazon Linux 2023"
+#deploy_environment "povbackend-test" "Python 3.9 running on 64bit Amazon Linux 2023"
 
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."
 cd streaming-env
-deploy_environment "mypovreality-streaming-test" "Docker running on 64bit Amazon Linux 2"
+deploy_environment "povstream-test" "Docker running on 64bit Amazon Linux 2"
 cd ../
 
 echo "Deployment process completed successfully."

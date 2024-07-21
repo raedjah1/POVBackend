@@ -1,6 +1,6 @@
 branch-defaults:
   dev2:
-    environment: pov-backend
+    environment: povbackend-test
     group_suffix: null
 environment-defaults:
   pov-backend:
