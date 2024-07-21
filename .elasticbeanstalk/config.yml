@@ -1,6 +1,6 @@
 branch-defaults:
   dev2:
-    environment: pov-streaming
+    environment: pov-backend
     group_suffix: null
 environment-defaults:
   pov-backend:
