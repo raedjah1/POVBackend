@@ -1,0 +1,21 @@
+{
+    "AWSEBDockerrunVersion": "1",
+    "Image": {
+      "Name": "637423613384.dkr.ecr.us-east-2.amazonaws.com/povstreaming:latest",
+      "Update": "true"
+    },
+    "Ports": [
+      {
+        "ContainerPort": 80,
+        "HostPort": 80
+      }
+    ],
+    "Volumes": [
+      {
+        "HostDirectory": "/var/app/current",
+        "ContainerDirectory": "/usr/src/app"
+      }
+    ],
+    "Logging": "/var/log/nginx"
+  }
+  
