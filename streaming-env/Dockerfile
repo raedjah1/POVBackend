@@ -28,6 +28,9 @@ COPY supervisord.conf /etc/supervisord.conf
 # Clean up build dependencies to reduce image size
 RUN apk del gcc musl-dev python3-dev linux-headers
 
+EXPOSE 1935
+EXPOSE 80
+
 # Start Supervisor
 CMD envsubst "$(env | sed -e 's/=.*//' -e 's/^/\$/g')" < \
   /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
