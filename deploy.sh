@@ -13,6 +13,22 @@ if [ -z "$REGION" ]; then
     exit 1
 fi
 
+# Function to deploy an Elastic Beanstalk environment for streaming
+deploy_stream_environment() {
+    local env_name=$1
+    local platform=$2
+
+    # Check if the environment exists
+    if ! eb status $env_name 2>/dev/null; then
+        echo "Creating environment $env_name..."
+        eb create $env_name --platform "$platform" --region $REGION --elb-type network
+    else
+        echo "Deploying to existing environment $env_name..."
+        eb use $env_name
+        eb deploy $env_name --elb-type network
+    fi
+}
+
 # Function to deploy an Elastic Beanstalk environment
 deploy_environment() {
     local env_name=$1
@@ -36,7 +52,7 @@ echo "Deploying Backend Environment..."
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."
 cd streaming-env
-deploy_environment "povstreaming-test" "Docker running on 64bit Amazon Linux 2"
+deploy_stream_environment "povstream-test" "Docker running on 64bit Amazon Linux 2"
 cd ../
 
 echo "Deployment process completed successfully."
