@@ -1,36 +1,25 @@
 {
-    "AWSEBDockerrunVersion": 2,
-    "containerDefinitions": [
+    "AWSEBDockerrunVersion": "1",
+    "Image": {
+      "Name": "637423613384.dkr.ecr.us-east-2.amazonaws.com/povstreaming:latest",
+      "Update": "true"
+    },
+    "Ports": [
       {
-        "name": "povstreaming",
-        "image": "637423613384.dkr.ecr.us-east-2.amazonaws.com/povstreaming:latest",
-        "essential": true,
-        "memory": 512,
-        "portMappings": [
-          {
-            "hostPort": 80,
-            "containerPort": 80
-          },
-          {
-            "hostPort": 1935,
-            "containerPort": 1935
-          }
-        ],
-        "mountPoints": [
-          {
-            "sourceVolume": "app",
-            "containerPath": "/usr/src/app"
-          }
-        ]
+        "ContainerPort": 80,
+        "HostPort": 80
+      },
+      {
+        "ContainerPort": 1935,
+        "HostPort": 1935
       }
     ],
-    "volumes": [
+    "Volumes": [
       {
-        "name": "app",
-        "host": {
-          "sourcePath": "/var/app/current"
-        }
+        "HostDirectory": "/var/app/current",
+        "ContainerDirectory": "/usr/src/app"
       }
-    ]
+    ],
+    "Logging": "/var/log/nginx"
   }
   
