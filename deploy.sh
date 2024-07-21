@@ -25,7 +25,7 @@ deploy_stream_environment() {
     else
         echo "Deploying to existing environment $env_name..."
         eb use $env_name
-        eb deploy $env_name --elb-type network
+        eb deploy $env_name
     fi
 }
 
