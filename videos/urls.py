@@ -2,7 +2,7 @@ from django.urls import path
 from .views import *
 
 urlpatterns = [
-    path('create-vision/', create_vision, name='create_vision'),
+    #path('create-vision/', create_vision, name='create_vision'),
     path('upload-thumbnail/<int:vision_pk>/', upload_thumbnail, name='upload_thumbnail'),
     path('vision-info/<int:vision_pk>/', update_or_get_vision_info, name='update_or_get_vision_info'),
     path('recommended-visions/', get_recommended_visions, name='get_recommended_visions'),

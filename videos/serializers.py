@@ -10,10 +10,12 @@ class VisionSerializer(serializers.ModelSerializer):
     url = serializers.CharField(max_length=500, required=False)
     creator = serializers.SerializerMethodField()
     aspect_ratio = serializers.CharField(max_length=4, required=False)
+    is_private = serializers.BooleanField(required=False)
+    is_highlight = serializers.BooleanField(required=False)
     
     class Meta: 
         model = Vision
-        fields = ['pk', 'title', 'thumbnail', 'description', 'views', 'url', 'creator', 'likes', 'interests', 'live', 'aspect_ratio', 'created_at']
+        fields = ['pk', 'title', 'thumbnail', 'description', 'views', 'url', 'creator', 'likes', 'interests', 'live', 'aspect_ratio', 'created_at', 'is_private', 'is_highlight']
         read_only_fields = ['creator', 'likes', 'created_at',]
 
     def get_creator(self, obj):

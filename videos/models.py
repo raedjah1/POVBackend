@@ -13,6 +13,8 @@ class Vision(models.Model):
     live = models.BooleanField(default=False)
     aspect_ratio = models.CharField(max_length=4, blank=True, null=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
+    is_highlight = models.BooleanField(default = False)
+    is_private = models.BooleanField(default = False)
 
     def __str__(self):
         return self.title

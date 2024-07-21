@@ -95,9 +95,9 @@ def get_recommended_visions(request):
         paginator = PageNumberPagination()
         paginator.page_size = 10
         if not spectator_interests.exists():
-            visions = Vision.objects.filter(~Q(url=None)).order_by('-created_at', '-likes')
+            visions = Vision.objects.filter(~Q(url=None) & Q(is_private = False)).order_by('-created_at', '-likes')
         else:
-            visions = Vision.objects.filter(interests__in=spectator_interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
+            visions = Vision.objects.filter(interests__in=spectator_interests).filter(~Q(url=None) & Q(is_private = False)).distinct().order_by('-created_at', '-likes')
         results = paginator.paginate_queryset(visions, request)
         return paginator.get_paginated_response(VisionSerializer(results, many=True).data)
     except Exception as e:
@@ -109,7 +109,7 @@ def get_recommended_visions(request):
 def get_visions_by_creator(request, pk):
     try:
         creator = Creator.objects.get(pk=pk)
-        visions = creator.vision_set.filter(~Q(url=None))
+        visions = creator.vision_set.filter(~Q(url=None)) if request.user.pk == creator.pk else creator.vision_set.filter(~Q(url=None) & Q(is_private = False))
         paginator = PageNumberPagination()
         paginator.page_size = 10
         results = paginator.paginate_queryset(visions, request)
@@ -123,7 +123,7 @@ def get_visions_by_creator(request, pk):
 def get_visions_by_interest(request):
     try:
         interests = [Interest.objects.get(name=interest_name) for interest_name in request.data['interests']]
-        visions = Vision.objects.filter(interests__in=interests).filter(~Q(url=None)).distinct().order_by('-created_at', '-likes')
+        visions = Vision.objects.filter(interests__in=interests).filter(~Q(url=None) & Q(is_private = False)).distinct().order_by('-created_at', '-likes')
         paginator = PageNumberPagination()
         paginator.page_size = 10
         results = paginator.paginate_queryset(visions, request)
@@ -159,7 +159,7 @@ def get_recommended_visions_from_subs(request):
         
         paginator = PageNumberPagination()
         paginator.page_size = 10
-        visions  = Vision.objects.filter(creator__in = spectatorSubs).filter(~Q(url = None)).distinct().order_by('-created_at', '-likes')
+        visions  = Vision.objects.filter(creator__in = spectatorSubs).filter(~Q(url = None) & Q(is_private = False)).distinct().order_by('-created_at', '-likes')
         results = paginator.paginate_queryset(visions, request)
         serializedVisions = VisionSerializer(results, many=True)
         return Response({
