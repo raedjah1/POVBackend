@@ -6,7 +6,6 @@ RUN apk add --no-cache python3 py3-pip supervisor gcc musl-dev python3-dev linux
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/nginx.conf.template
-COPY certs /opt/certs
 
 # Create directory for your data
 RUN mkdir -p /opt/data/hls
