@@ -5,6 +5,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from http import HTTPStatus
 from django.db.models import Count
+import cloudinary.uploader
+from pov_backend import settings
 from .models import Event
 from .serializers import EventSerializer
 from videos.models import Vision
@@ -37,9 +39,18 @@ def get_create_delete_events(request):
                 creator = Creator.objects.get(user=request.user)
                 event.creator = creator
                 vision = Vision.objects.create(title=event.title, thumbnail='thumbnail', creator=creator, description=event.description)
+                thumbnail = request.FILES.get('thumbnail', None)
+            
+                if thumbnail:
+                    thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.pk}-thumbnail', unique_filename=False, overwrite=True)
+                    vision.thumbnail = thumbnail_res['secure_url']
+                else:
+                    return Response({'message': 'Bad request'}, status=HTTPStatus.BAD_REQUEST)
+
                 for interest_pk in request.data['interests']:
                     interest = Interest.objects.get(pk=interest_pk)
                     vision.interests.add(interest)
+
                 event.vision = vision
                 event.save()
                 return Response({'message': 'Successfully created event', 'data': EventSerializer(event).data, 'id': vision.pk}, status=HTTPStatus.OK)
@@ -65,13 +76,39 @@ def edit_or_delete_events(request, pk):
 @api_view(['POST'])
 def activate_event_livestream(request, pk):
     try:
-        vision = Vision.with_locks.with_is_locked(request.user).get(pk=pk)
-        # Implement the MUX API integration for creating a live stream
-        # Set the vision's URL to the live stream URL
-        vision.save()
-        return Response({'message': 'Live stream created', 'vision': VisionSerializer(vision).data})
+        event = Event.objects.get(pk=pk)
+        vision_obj = event.vision
+
+        if vision_obj:
+            vision_instance = vision_obj.save()
+            vision_instance.creator = Creator.objects.get(user=request.user)
+            vision_instance.is_live = True
+            
+            # Set the URL for HLS playback
+            vision_instance.url = f'{settings.HOST}/{vision_instance.pk}.m3u8'
+            
+            # Get thumbnail upload
+            vision_instance.save()
+            
+            # Generate RTMP stream link
+            rtmp_stream_link = f'rtmp://{settings.RTMP_HOST}/stream/{vision_instance.pk}'
+            
+            # Update event with live vision
+            event.vision = vision_instance
+            event.save()
+            
+            return Response({
+                'message': 'Successfully activated event livestream',
+                'vision_id': vision_instance.pk,
+                'hls_url': vision_instance.url,
+                'rtmp_stream_link': rtmp_stream_link
+            }, status=HTTPStatus.OK)
+        else:
+            return Response({'message': 'Invalid vision data', 'error': vision_obj.errors}, status=HTTPStatus.BAD_REQUEST)
+    except Event.DoesNotExist:
+        return Response({'message': 'Event not found', 'error': True}, status=HTTPStatus.NOT_FOUND)
     except Exception as e:
-        return Response({'message': 'There was an error', 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+        return Response({'message': 'There was an error', 'error': str(e)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])

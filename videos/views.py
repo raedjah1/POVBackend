@@ -1,4 +1,5 @@
 import logging
+import re
 import cloudinary.uploader
 import boto3
 from botocore.client import Config
@@ -20,6 +21,7 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
 
 # TODO Nearby Vision, GDAL library
 # from django.contrib.gis.geos import Point
@@ -50,6 +52,87 @@ def create_vision(request):
         logger.error(f"Error creating vision: {e}")
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.BAD_REQUEST)
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def create_live_vision(request):
+    try:
+        vision_obj = VisionSerializer(data=request.data)
+        if vision_obj.is_valid():
+            vision_instance = vision_obj.save()
+            vision_instance.creator = Creator.objects.get(user=request.user)
+            vision_instance.is_live = True
+            
+            # Set the URL for HLS playback
+            vision_instance.url = f'{settings.FILE_HOST}/{vision_instance.pk}.m3u8'
+            
+            # Get thumbnail upload
+            thumbnail = request.FILES.get('thumbnail')
+            if thumbnail:
+                thumbnail = request.FILES['thumbnail']
+                thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision_instance.pk}-thumbnail', unique_filename=False, overwrite=True)
+                vision_instance.thumbnail = thumbnail_res['secure_url']
+            
+            vision_instance.save()
+
+            # Generate RTMP stream link
+            rtmp_stream_link = f'{settings.RTMP_HOST}/stream/{vision_instance.pk}'
+            return Response({
+                'message': 'Successfully created live vision',
+                'vision_id': vision_instance.pk,
+                'hls_url': vision_instance.url,
+                'rtmp_stream_link': rtmp_stream_link
+            })
+        else:
+            return Response({'message': 'There was an error', 'error': vision_obj.errors}, status=HTTPStatus.BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Error creating live vision: {e}")
+        return Response({'error': True, 'message': 'There was an error creating live vision'}, status=HTTPStatus.BAD_REQUEST)
+
+@api_view(['PUT'])
+@permission_classes([AllowAny])
+def end_live_vision(request, vision_pk):
+    api_key = request.GET.get('api_key')
+
+    if api_key != settings.NGINX_API_KEY:
+        return Response({"error": "Unauthorized"}, status=401)
+    
+    try:
+        vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
+
+        if vision.is_live:
+            vision.is_live = False
+            
+            # Get manifest file from B2 bucket
+            b2_client = boto3.client('b2')
+            manifest_file_key = f'{vision_pk}.m3u8'
+            manifest_file_obj = b2_client.get_object(Bucket=os.environ.get('B2_BUCKET'), Key=manifest_file_key)
+            manifest_content = manifest_file_obj['Body'].read().decode('utf-8')
+            
+            # Check if #EXT-X-PLAYLIST-TYPE already exists
+            playlist_type_pattern = re.compile(r'#EXT-X-PLAYLIST-TYPE:.*\n')
+            if playlist_type_pattern.search(manifest_content):
+                # Replace existing playlist type with VOD
+                manifest_content = playlist_type_pattern.sub('#EXT-X-PLAYLIST-TYPE:VOD\n', manifest_content)
+            else:
+                # Add VOD playlist type near the beginning (after #EXTM3U)
+                manifest_content = manifest_content.replace('#EXTM3U\n', '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n', 1)
+
+            # Ensure #EXT-X-ENDLIST is at the end
+            if '#EXT-X-ENDLIST' not in manifest_content:
+                manifest_content += '\n#EXT-X-ENDLIST'
+            
+            # Put updated manifest back to B2
+            b2_client.put_object(Bucket=os.environ.get('B2_BUCKET'), Key=manifest_file_key, Body=manifest_content.encode('utf-8'))
+            
+            vision.save()
+            return Response({'message': 'Successfully ended live vision'})
+        else:
+            return Response({'message': 'Vision is not live'}, status=HTTPStatus.BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Error ending live vision: {e}")
+        return Response({'error': True, 'message': 'There was an error ending live vision'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
 @api_view(['PUT'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -57,7 +140,7 @@ def upload_thumbnail(request, vision_pk):
     try:
         vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
         thumbnail = request.FILES['thumbnail']
-        thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.title}-thumbnail', unique_filename=False, overwrite=True)
+        thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.pk}-thumbnail', unique_filename=False, overwrite=True)
         vision.thumbnail = thumbnail_res['secure_url']
         vision.save()
         return Response({'message': 'Successfully uploaded thumbnail'})
@@ -81,7 +164,15 @@ def update_or_get_vision_info(request, vision_pk):
     elif request.method == 'PUT':
         try:
             vision = Vision.with_locks.with_is_locked(request.user).get(pk=vision_pk)
+
+            # Check if thumbnail is included in the request
+            if 'thumbnail' in request.FILES:
+                thumbnail = request.FILES['thumbnail']
+                thumbnail_res = cloudinary.uploader.upload(thumbnail, public_id=f'{request.user.username}-{vision.pk}-thumbnail', unique_filename=False, overwrite=True)
+                vision.thumbnail = thumbnail_res['secure_url']
+
             new_info = VisionSerializer(vision, data=request.data, partial=True)
+            
             if new_info.is_valid():
                 new_info.save()
                 return Response({'message': 'Successfully updated vision', 'data': new_info.data})
@@ -101,7 +192,7 @@ def get_recommended_visions(request):
         paginator = PageNumberPagination()
         paginator.page_size = 10
 
-        # SImple Version:
+        # Simple Recommendations:
         # user_interests = Spectator.objects.get(user=request.user).interests.all()
         # if not user_interests.exists():
         #     visions = Vision.with_locks.with_is_locked(request.user).filter(~Q(url=None)).order_by('-created_at', '-likes')
@@ -300,6 +391,8 @@ def get_recommended_visions_algorithm(user):
             default=Value(0),
             output_field=FloatField()
         )
+    ).exclude(
+        pk__in=watch_history.values_list('pk', flat=True)
     ).annotate(
         relevance_score=ExpressionWrapper(
             (F('interest_match') * 3) +  # Prioritize content matching user interests

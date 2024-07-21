@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure--=@&1z!_qy2p)+zj2v8a2!d8bt)i33z%zwnd%kmb4b^7-t7%e1
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    '61f0-50-144-69-94.ngrok-free.app',
+    '3eb7-50-144-69-94.ngrok-free.app',
     '127.0.0.1',
     'pov-backend.eba-wizj9tq9.us-east-2.elasticbeanstalk.com',
     '0.0.0.0',
@@ -150,6 +150,16 @@ REST_FRAMEWORK = {
 }
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://61f0-50-144-69-94.ngrok-free.app',
+    'https://3eb7-50-144-69-94.ngrok-free.app',
     'http://0.0.0.0'
 ]
+
+# API
+NGINX_API_KEY = '8f4a9c2e7b6d1f3a5e0d9c8b7f2a1e6d'
+
+if DEBUG:
+    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
+    RTMP_HOST = 'rtmp://localhost:1935/live'
+else:
+    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
+    RTMP_HOST = 'rtmp://3eb7-50-144-69-94.ngrok-free.app/live'

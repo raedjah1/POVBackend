@@ -22,5 +22,5 @@ urlpatterns = [
     path('sign-in-google/', sign_in_google, name='sign_in_google'),
     path('sign-in-facebook/', sign_in_facebook, name='sign_in_facebook'),
     path('sign-in-apple/', sign_in_apple, name='sign_in_apple'),
-    path('update-user-details/', update_user_details, name='update_user_details'),
+    path('update-user-details/', update_user_details, name='update_user_details')
 ]

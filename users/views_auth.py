@@ -24,15 +24,23 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from datetime import datetime, timedelta
 from django.contrib.auth.models import BaseUserManager
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
 
 logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def create_creator_account(request):
     creator_instance = CreatorSerializer(data=request.data)
+    user = User.objects.get(pk=request.user.pk)
+
     if creator_instance.is_valid():
-        creator = Creator.objects.create(user=request.user, subscription_price=request.data['subscription_price'], subscriber_count=0)
+        creator = Creator.objects.create(user=user, subscription_price=request.data['subscription_price'], subscriber_count=0)
         creator_account = CreatorSerializer(creator)
+
         return Response({"message": "Creator account created successfully", "data": creator_account.data}, status=status.HTTP_201_CREATED)
     else:
         return Response(creator_instance.errors, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -195,7 +203,8 @@ def sign_in_google(request):
         user_data = id_token.verify_oauth2_token(
             google_token, google_requests.Request(), os.environ['GOOGLE_OAUTH_CLIENT_ID']
         )
-    except ValueError:
+    except ValueError as e:
+        print(e)
         return Response({"error": "Invalid Google token"}, status=status.HTTP_403_FORBIDDEN)
 
     email = user_data["email"]
@@ -206,7 +215,7 @@ def sign_in_google(request):
             "first_name": user_data.get("given_name"),
             "last_name": user_data.get("family_name"),
             "sign_in_method": 'google',
-            "password": BaseUserManager.make_random_password()
+            "password": User.objects.make_random_password()
         }
     )
 
@@ -268,6 +277,7 @@ def sign_in_facebook(request):
         user_info_response = requests.get(f"{FACEBOOK_URL}{user_id}", params=user_info_params).json()
 
         if "error" in user_info_response or "email" not in user_info_response:
+            print(user_info_response)
             return Response({"error": "Failed to get user information"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         email = user_info_response["email"]
@@ -279,7 +289,7 @@ def sign_in_facebook(request):
                 "first_name": user_info_response.get("name", "").split()[0],
                 "last_name": " ".join(user_info_response.get("name", "").split()[1:]),
                 "sign_in_method": 'facebook',
-                "password": BaseUserManager.make_random_password()
+                "password": User.objects.make_random_password()
             }
         )
 
@@ -293,6 +303,7 @@ def sign_in_facebook(request):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
+        print(e)
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -337,7 +348,7 @@ def sign_in_apple(request):
                         "first_name": email.split('@')[0],
                         "last_name": email.split('@')[0],
                         "sign_in_method": 'apple',
-                        "password": BaseUserManager.make_random_password()
+                        "password": User.objects.make_random_password()
                     }
                 )
                 

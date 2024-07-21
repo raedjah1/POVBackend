@@ -24,6 +24,7 @@ def health_check(request):
 
 urlpatterns = [
     path('', health_check, name='health_check'),
+    path('health', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('visions/', include('videos.urls')),
