@@ -8,6 +8,10 @@
       {
         "ContainerPort": 80,
         "HostPort": 80
+      },
+      {
+        "ContainerPort": 1935,
+        "HostPort": 1935
       }
     ],
     "Volumes": [

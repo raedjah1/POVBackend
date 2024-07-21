@@ -29,6 +29,7 @@ COPY supervisord.conf /etc/supervisord.conf
 RUN apk del gcc musl-dev python3-dev linux-headers
 
 EXPOSE 80
+EXPOSE 1935
 
 # Start Supervisor
 CMD envsubst "$(env | sed -e 's/=.*//' -e 's/^/\$/g')" < \
