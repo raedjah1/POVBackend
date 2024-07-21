@@ -26,3 +26,6 @@ urllib3==2.2.2
 watchdog==4.0.1
 wrapt==1.16.0
 yarl==1.9.4
+redis==5.0.7
+Flask==3.0.3
+psutil==5.8.0

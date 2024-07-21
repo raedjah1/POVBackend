@@ -7,6 +7,7 @@ import b2sdk.v2 as b2
 from dotenv import load_dotenv
 import re
 import glob
+import redis
 
 load_dotenv()
 
@@ -14,6 +15,18 @@ info = b2.InMemoryAccountInfo()
 b2_api = b2.B2Api(info)
 b2_api.authorize_account("production", os.getenv("B2_KEY_ID"), os.getenv("B2_APPLICATION_KEY"))
 b2_bucket = b2_api.get_bucket_by_name("coinsniper-api-test")
+
+# Initialize Redis client (ElastiCache)
+redis_client = redis.Redis(
+    host=os.getenv("ELASTICACHE_HOST"),
+    port=os.getenv("ELASTICACHE_PORT"),
+    username="default",
+    password="AVNS_F2F4vL-BhxS-QraddBE",
+    ssl=True,
+    decode_responses=True,
+    socket_timeout=5,
+    socket_connect_timeout=5
+)
 
 class AsyncHLSFileWatcher(FileSystemEventHandler):
     def __init__(self, directory_to_watch, num_workers=6, stream_timeout=180):
@@ -38,7 +51,7 @@ class AsyncHLSFileWatcher(FileSystemEventHandler):
                     print(f"Non-index M3U8 file queued for direct upload: {file_path}")
                 else:
                     asyncio.run(self.process_m3u8(file_path))
-
+    
     async def process_m3u8(self, m3u8_path):
         await asyncio.sleep(0.5)  # Short delay to ensure file writing is complete
         if m3u8_path not in self.m3u8_files:
@@ -64,102 +77,189 @@ class AsyncHLSFileWatcher(FileSystemEventHandler):
                         print(f"Queued for upload: {ts_path}")
                     else:
                         print(f"Warning: TS file {ts_file} not found in directory.")
-                await self.upload_queue.put(m3u8_path)
+
+                # Check if m3u8 file is in redis
+                redis_key = os.path.relpath(m3u8_path, self.directory_to_watch)
+                cached_content = redis_client.get(redis_key)
+                
+                if not cached_content:
+                    # If it is not, then upload it to redis and put in upload queue
+                    redis_client.set(redis_key, content)
+                    await self.upload_queue.put(m3u8_path)
+                else:                    
+                    # Check for the last updated ts file in the playlist from redis
+                    cached_ts_files = [line.strip() for line in cached_content.splitlines() if line.strip().endswith('.ts')]
+                    last_cached_ts = cached_ts_files[-1] if cached_ts_files else None
+
+                    print(f"Last cached TS file: {last_cached_ts}")
+                    
+                    # Find all local ts files (and EXTINFO line above them) that are after the last updated ts file
+                    new_content_lines = []
+                    add_lines = False
+
+                    for line in content.splitlines():
+                        if add_lines:
+                            new_content_lines.append(line)
+                        # Since we are using sytem time for .ts naming:
+                        elif not line.startswith('#') and int(line.strip().split('.')[0]) >= int(last_cached_ts.split('.')[0]):
+                            add_lines = True
+                    
+                    # Add those files to manifest and upload back to redis and put in upload queue
+                    if new_content_lines:
+                        updated_content = cached_content + '\n'.join(new_content_lines) + '\n'
+                        redis_client.set(redis_key, updated_content)
+
+                        await self.upload_queue.put((redis_key, updated_content.encode('utf-8'), 'application/vnd.apple.mpegurl'))
+                        print(f"Queued for upload with redis key: {redis_key}")
+                    
                 print(f"Queued for upload: {m3u8_path}")
                 self.m3u8_files[m3u8_path].update(new_ts_files)
                 self.last_update_time[m3u8_path] = time.time()
         except Exception as e:
             print(f"Error processing {m3u8_path}: {str(e)}")
 
-    async def check_stream_end(self):
-        while True:
-            current_time = time.time()
-            ended_streams = []
+    # async def check_stream_end(self):
+    #     while True:
+    #         current_time = time.time()
+    #         ended_streams = []
 
-            for m3u8_path, last_update in self.last_update_time.items():
-                # Only consider m3u8 files that have "index" in their path
-                if "index" in m3u8_path and current_time - last_update > self.stream_timeout:
-                    print(f"Stream seems to have ended for {m3u8_path}")
-                    ended_streams.append(m3u8_path)
+    #         for m3u8_path, last_update in self.last_update_time.items():
+    #             # Only consider m3u8 files that have "index" in their path
+    #             if "index" in m3u8_path and current_time - last_update > self.stream_timeout:
+    #                 print(f"Stream seems to have ended for {m3u8_path}")
+    #                 ended_streams.append(m3u8_path)
             
-            for ended_stream in ended_streams:
-                # Get the base directory of the ended stream
-                base_dir = os.path.dirname(os.path.dirname(ended_stream))
+    #         for ended_stream in ended_streams:
+    #             # Get the base directory of the ended stream
+    #             base_dir = os.path.dirname(os.path.dirname(ended_stream))
                 
-                # Find all index.m3u8 files in subdirectories
-                for resolution_m3u8 in glob.glob(os.path.join(base_dir, "*", "index.m3u8")):
-                    print(f"Converting to VOD: {resolution_m3u8}")
-                    await self.convert_to_vod(resolution_m3u8)
+    #             # Find all index.m3u8 files in subdirectories
+    #             for resolution_m3u8 in glob.glob(os.path.join(base_dir, "*", "index.m3u8")):
+    #                 print(f"Converting to VOD: {resolution_m3u8}")
+    #                 await self.convert_to_vod(resolution_m3u8)
                 
-                # Convert the main m3u8 file
-                main_m3u8 = os.path.join(base_dir, os.path.basename(base_dir) + ".m3u8")
-                if os.path.exists(main_m3u8):
-                    print(f"Converting main playlist to VOD: {main_m3u8}")
-                    await self.convert_to_vod(main_m3u8)
+    #             # Convert the main m3u8 file
+    #             main_m3u8 = os.path.join(base_dir, os.path.basename(base_dir) + ".m3u8")
+    #             if os.path.exists(main_m3u8):
+    #                 print(f"Converting main playlist to VOD: {main_m3u8}")
+    #                 await self.convert_to_vod(main_m3u8)
                 
-                # Remove the ended stream from tracking
-                self.last_update_time.pop(ended_stream)
+    #             # Remove the ended stream from tracking
+    #             self.last_update_time.pop(ended_stream)
             
-            await asyncio.sleep(60)  # Check every minute
+    #         await asyncio.sleep(60)  # Check every minute
 
-    async def convert_to_vod(self, m3u8_path):
-        try:
-            with open(m3u8_path, 'r') as file:
-                content = file.read()
+    # async def convert_to_vod(self, m3u8_path):
+    #     try:
+    #         with open(m3u8_path, 'r') as file:
+    #             content = file.read()
 
-            # Remove live-specific tags
-            content = re.sub(r'#EXT-X-ENDLIST.*\n?', '', content)
-            content = re.sub(r'#EXT-X-PLAYLIST-TYPE:EVENT.*\n?', '', content)
+    #         # Remove live-specific tags
+    #         content = re.sub(r'#EXT-X-ENDLIST.*\n?', '', content)
+    #         content = re.sub(r'#EXT-X-PLAYLIST-TYPE:EVENT.*\n?', '', content)
 
-            # Add VOD-specific tags
-            content = "#EXT-X-PLAYLIST-TYPE:VOD\n" + content
+    #         # Add VOD-specific tags
+    #         content = "#EXT-X-PLAYLIST-TYPE:VOD\n" + content
 
-            # Ensure all segments are included (remove any #EXT-X-DISCONTINUITY tags)
-            content = re.sub(r'#EXT-X-DISCONTINUITY.*\n?', '', content)
+    #         # Ensure all segments are included (remove any #EXT-X-DISCONTINUITY tags)
+    #         content = re.sub(r'#EXT-X-DISCONTINUITY.*\n?', '', content)
 
-            # Add the ENDLIST tag at the end
-            content += "\n#EXT-X-ENDLIST\n"
+    #         # Add the ENDLIST tag at the end
+    #         content += "\n#EXT-X-ENDLIST\n"
 
-            print(f"Converted {m3u8_path} to VOD format")
+    #         print(f"Converted {m3u8_path} to VOD format")
 
-            # Queue the modified content for upload
-            file_name = os.path.relpath(m3u8_path, self.directory_to_watch)
-            await self.upload_queue.put((file_name, content.encode('utf-8'), 'application/vnd.apple.mpegurl'))
+    #         # Queue the modified content for upload
+    #         file_name = os.path.relpath(m3u8_path, self.directory_to_watch)
+    #         await self.upload_queue.put((file_name, content.encode('utf-8'), 'application/vnd.apple.mpegurl'))
 
-            print(f"Queued converted VOD content for upload: {file_name}")
-        except Exception as e:
-            print(f"Error converting {m3u8_path} to VOD: {str(e)}")
-
+    #         print(f"Queued converted VOD content for upload: {file_name}")
+    #     except Exception as e:
+    #         print(f"Error converting {m3u8_path} to VOD: {str(e)}")
+    
     async def upload_worker(self):
         while True:
-            file_path = await self.upload_queue.get()
-            file_path = file_path.replace('\\', '/')
+            file_or_tuple = await self.upload_queue.get()
+            
+            if isinstance(file_or_tuple, tuple):
+                file_name, content, content_type = file_or_tuple
+                start_time = time.time()
+                try:
+                    uploaded_file = await asyncio.to_thread(
+                        b2_bucket.upload_bytes,
+                        data_bytes=content,
+                        file_name=file_name,
+                        file_infos={'ContentType': content_type},
+                    )
 
-            start_time = time.time()
-            try:
-                content_type = 'application/vnd.apple.mpegurl' if file_path.endswith('.m3u8') else 'video/MP2T'
-                uploaded_file = await asyncio.to_thread(
-                    b2_bucket.upload_local_file,
-                    local_file=file_path,
-                    file_name=os.path.relpath(file_path, self.directory_to_watch),
-                    file_infos={'ContentType': content_type},
-                )
+                    end_time = time.time()
+                    upload_duration = end_time - start_time
 
-                end_time = time.time()
-                upload_duration = end_time - start_time
+                    print(f"Uploaded {file_name} to B2 bucket")
+                    print(f"Upload time: {upload_duration:.2f} seconds")
+                    print(f"-------------------------------------")
+                except Exception as e:
+                    print(f"Failed to upload {file_name}: {str(e)}")
+                finally:
+                    self.upload_queue.task_done()
+            else:
+                file_path = file_or_tuple.replace('\\', '/')
+                start_time = time.time()
+                try:
+                    content_type = 'video/MP2T' if file_path.endswith('.ts') else 'application/vnd.apple.mpegurl'
+                    uploaded_file = await asyncio.to_thread(
+                        b2_bucket.upload_local_file,
+                        local_file=file_path,
+                        file_name=os.path.relpath(file_path, self.directory_to_watch),
+                        file_infos={'ContentType': content_type},
+                    )
+
+                    end_time = time.time()
+                    upload_duration = end_time - start_time
+
+                    file_size = os.path.getsize(file_path)
+                    upload_speed = file_size / upload_duration / 1024 / 1024  # in MB/s
+                    
+                    print(f"Uploaded {file_path} to B2 bucket")
+                    print(f"Upload time: {upload_duration:.2f} seconds")
+                    print(f"File size: {file_size / 1024 / 1024:.2f} MB")
+                    print(f"Upload speed: {upload_speed:.2f} MB/s")
+                    print(f"-------------------------------------")
+                except Exception as e:
+                    print(f"Failed to upload {file_path}: {str(e)}")
+                finally:
+                    self.upload_queue.task_done()
+
+    # async def upload_worker(self):
+    #     while True:
+    #         file_path = await self.upload_queue.get()
+    #         file_path = file_path.replace('\\', '/')
+
+    #         start_time = time.time()
+    #         try:
+    #             content_type = 'application/vnd.apple.mpegurl' if file_path.endswith('.m3u8') else 'video/MP2T'
+    #             uploaded_file = await asyncio.to_thread(
+    #                 b2_bucket.upload_local_file,
+    #                 local_file=file_path,
+    #                 file_name=os.path.relpath(file_path, self.directory_to_watch),
+    #                 file_infos={'ContentType': content_type},
+    #             )
+
+    #             end_time = time.time()
+    #             upload_duration = end_time - start_time
                 
-                file_size = os.path.getsize(file_path)
-                upload_speed = file_size / upload_duration / 1024 / 1024  # in MB/s
+    #             file_size = os.path.getsize(file_path)
+    #             upload_speed = file_size / upload_duration / 1024 / 1024  # in MB/s
 
-                print(f"Uploaded {file_path} to B2 bucket")
-                print(f"Upload time: {upload_duration:.2f} seconds")
-                print(f"File size: {file_size / 1024 / 1024:.2f} MB")
-                print(f"Upload speed: {upload_speed:.2f} MB/s")
-                print(f"-------------------------------------")
-            except Exception as e:
-                print(f"Failed to upload {file_path}: {str(e)}")
-            finally:
-                self.upload_queue.task_done()
+    #             print(f"Uploaded {file_path} to B2 bucket")
+    #             print(f"Upload time: {upload_duration:.2f} seconds")
+    #             print(f"File size: {file_size / 1024 / 1024:.2f} MB")
+    #             print(f"Upload speed: {upload_speed:.2f} MB/s")
+    #             print(f"-------------------------------------")
+    #         except Exception as e:
+    #             print(f"Failed to upload {file_path}: {str(e)}")
+    #         finally:
+    #             self.upload_queue.task_done()
 
     async def run(self):
         observer = Observer()
@@ -171,8 +271,8 @@ class AsyncHLSFileWatcher(FileSystemEventHandler):
         print(f"Started {self.num_workers} upload workers")
 
         # Create the stream end checker task
-        stream_end_checker = asyncio.create_task(self.check_stream_end())
-        print("Started stream end checker")
+        # stream_end_checker = asyncio.create_task(self.check_stream_end())
+        # print("Started stream end checker")
 
         try:
             # Keep the main task running
@@ -191,6 +291,6 @@ class AsyncHLSFileWatcher(FileSystemEventHandler):
             print("All tasks have been cancelled and observer stopped.")
 
 if __name__ == "__main__":
-    directory_to_watch = "./hls"  # Update this to your HLS directory path
+    directory_to_watch = "./hls"  # HLS directory path
     watcher = AsyncHLSFileWatcher(directory_to_watch)
     asyncio.run(watcher.run())
