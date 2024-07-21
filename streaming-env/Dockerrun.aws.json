@@ -3,7 +3,7 @@
     "containerDefinitions": [
       {
         "name": "povstreaming",
-        "image": "637423613384.dkr.ecr.us-east-2.amazonaws.com/povstreaming:latest",
+        "image": "mnm967/povstreaming:latest",
         "essential": true,
         "memory": 512,
         "portMappings": [
