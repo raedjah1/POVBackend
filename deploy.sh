@@ -36,7 +36,7 @@ echo "Deploying Backend Environment..."
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."
 cd streaming-env
-deploy_environment "povstream-test" "Docker running on 64bit Amazon Linux 2"
+deploy_environment "povstreamm-test" "Docker running on 64bit Amazon Linux 2"
 cd ../
 
 echo "Deployment process completed successfully."
