@@ -112,7 +112,7 @@ def subscribe(request, pk):
             creator.save()
             
             return Response({
-                'message': f'Subscription created for {creator.user.username}',
+                'message': 'success',
                 'type': intent_type,
                 'client_secret': client_secret,
                 'subscription_id': stripe_subscription.id

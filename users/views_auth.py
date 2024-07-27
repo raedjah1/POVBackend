@@ -111,9 +111,11 @@ def get_spectator_accounts(request):
 def register_user(request):
     username = request.data.get('username')
     email = request.data.get('email')
-    first_name = request.data.get('first_name')
-    last_name = request.data.get('last_name')
+    first_name = request.data.get('firstname')
+    last_name = request.data.get('lastname')
     password = request.data.get('password')
+
+    print([username, email, first_name, last_name, password])
 
     if not all([username, email, first_name, last_name, password]):
         return Response({'error': 'All fields are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -143,6 +145,7 @@ def register_user(request):
     except IntegrityError:
         return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        print(e)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -151,6 +154,7 @@ def sign_in(request):
     username = request.data.get('username')
     password = request.data.get('password')
     user = authenticate(username=username, password=password)
+
     if user:
         token, _ = Token.objects.get_or_create(user=user)
         return Response({
@@ -158,42 +162,45 @@ def sign_in(request):
             'username': user.username,
             'token': token.key
         })
+    
     return Response({'error': 'Invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def sign_in(request):
-    email = request.data.get('email')
-    password = request.data.get('password')
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def sign_in(request):
+#     email = request.data.get('email')
+#     password = request.data.get('password')
     
-    try:
-        # Get the user by email
-        user = User.objects.get(email=email)
+#     try:
+#         # Get the user by email
+#         user = User.objects.get(email="email")
 
-        # Check if the sign-in method is email
-        if user.sign_in_method != 'email':
-            return Response({
-                'error': f'This account uses {user.sign_in_method} for sign in. Please use the appropriate sign-in method.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+#         print(user)
+
+#         # Check if the sign-in method is email
+#         if user.sign_in_method != 'email':
+#             return Response({
+#                 'error': f'This account uses {user.sign_in_method} for sign in. Please use the appropriate sign-in method.'
+#             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Authenticate using the username and password
-        authenticated_user = authenticate(username=user.username, password=password)
+#         # Authenticate using the username and password
+#         authenticated_user = authenticate(username=user.username, password=password)
         
-        if authenticated_user:
-            token, _ = Token.objects.get_or_create(user=authenticated_user)
-            return Response({
-                'user_id': authenticated_user.id,
-                'username': authenticated_user.username,
-                'email': authenticated_user.email,
-                'token': token.key
-            })
-        else:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+#         if authenticated_user:
+#             token, _ = Token.objects.get_or_create(user=authenticated_user)
+#             return Response({
+#                 'user_id': authenticated_user.id,
+#                 'username': authenticated_user.username,
+#                 'email': authenticated_user.email,
+#                 'token': token.key
+#             })
+#         else:
+#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
     
-    except User.DoesNotExist:
-        return Response({'error': 'User with this email does not exist'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+#     except User.DoesNotExist:
+#         return Response({'error': 'User with this email does not exist'}, status=status.HTTP_404_NOT_FOUND)
+#     except Exception as e:
+#         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

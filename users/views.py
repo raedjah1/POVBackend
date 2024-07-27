@@ -4,6 +4,9 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from http import HTTPStatus
+from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
+from videos.models import Vision
+from videos.serializers import VisionSerializer
 from .models import User, Interest, Creator
 from .serializers import InterestSerializer, CreatorSerializer, UserSerializer
 import cloudinary.uploader
@@ -11,6 +14,7 @@ from django.db.models import Sum, F, ExpressionWrapper, FloatField
 from django.db.models.functions import Coalesce
 from rest_framework.authentication import TokenAuthentication
 from rest_framework import status
+from django.contrib.postgres.search import TrigramSimilarity
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -90,19 +94,29 @@ def add_or_remove_interest_from_spectator(request):
     except Exception as e:
         return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def search_interests(request):
     try:
-        query = request.GET.get('name', '')
-        interests = Interest.objects.filter(name__icontains=query) #TODO Fuzzy Search
-        return Response({
-            'message': 'Interest found',
-            'data': InterestSerializer(interests, many=True).data
-        }, status=HTTPStatus.OK)
-    except Exception as e:
-        return Response({'message': str(e), 'error': True}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+        query = request.data.get('search_text', '')
 
+        if not query:
+            return Response({
+                'message': 'Please provide a search query',
+                'error': True
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        interests = Interest.objects.annotate(
+            similarity=TrigramSimilarity('name', query)
+        ).filter(similarity__gt=0.3).order_by('-similarity')
+
+        return Response({
+            'message': 'Interests found',
+            'data': InterestSerializer(interests, many=True).data
+        }, status=status.HTTP_OK)
+    except Exception as e:
+        return Response({'message': str(e), 'error': True}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 @api_view(['POST'])
 def get_or_create_interests(request):
     try:
@@ -118,7 +132,6 @@ def get_or_create_interests(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_popular_creators(request):
-    
     # Calculate the weighted score for each creator
     popular_creators = Creator.objects.annotate(
         total_views=Coalesce(Sum('vision__views'), 0),
@@ -137,3 +150,82 @@ def get_popular_creators(request):
 
     serializer = CreatorSerializer(results, many=True)
     return paginator.get_paginated_response(serializer.data)
+
+@api_view(['GET'])
+def creator_live_status(request, creator_id):
+    try:
+        creator = Creator.objects.get(pk=creator_id)
+        
+        # Get the creator's live vision (assuming only one can be live at a time)
+        live_vision = Vision.objects.filter(creator=creator, live=True).first()
+        
+        status_data = {
+            'is_live': live_vision is not None,
+            'creator_id': creator_id,
+            'vision': VisionSerializer(live_vision).data if live_vision else None
+        }
+        
+        return Response(status_data)
+    except Creator.DoesNotExist:
+        return Response({'error': 'Creator not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def search_creators(request):
+    try:
+        search_text = request.data.get('search_text', '')
+        interest_name = request.data.get('interest')
+
+        # Create the search vector
+        search_vector = SearchVector('user__username', weight='A') + \
+                        SearchVector('bio', weight='B') + \
+                        SearchVector('user__interests__name', weight='C')
+
+        # Create the search query
+        search_query = SearchQuery(search_text)
+
+        # Filter and rank the results
+        creators = Creator.objects.annotate(
+            rank=SearchRank(search_vector, search_query)
+        ).filter(rank__gte=0.01).order_by('-rank')
+
+        # Apply interest filter if provided
+        if interest_name:
+            try:
+                interest = Interest.objects.get(name=interest_name)
+                creators = creators.filter(user__interests=interest)
+            except Interest.DoesNotExist:
+                return Response({'error': 'Interest not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Pagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 10  # Set the number of items per page
+        result_page = paginator.paginate_queryset(creators, request)
+
+        serializer = CreatorSerializer(result_page, many=True)
+
+        return paginator.get_paginated_response(serializer.data)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# @api_view(['GET'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def phone_connection_status(request):
+#     try:
+#         # Refresh the user object from the database
+#         user = User.objects.get(pk=request.user.pk)
+#         status_data = {
+#             'is_connected': user.phone_connected
+#         }
+
+#         return Response(status_data)
+#     except User.DoesNotExist:
+#         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+#     except Exception as e:
+#         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    

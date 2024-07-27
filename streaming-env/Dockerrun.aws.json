@@ -5,7 +5,6 @@
         "name": "povstreaming",
         "image": "mnm967/povstreaming:latest",
         "essential": true,
-        "memory": 512,
         "portMappings": [
           {
             "hostPort": 80,

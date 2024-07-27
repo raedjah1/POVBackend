@@ -10,8 +10,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from http import HTTPStatus
 from django.db.models import Q
-from .models import Vision
-from .serializers import VisionSerializer
+from .models import Vision, Comment
+from .serializers import CommentSerializer, VisionSerializer
 from users.models import Interest, Spectator, Creator
 import os
 from django.db.models import Count, Q, F, ExpressionWrapper, FloatField, Case, When, Value
@@ -22,6 +22,7 @@ from datetime import timedelta
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
+from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 
 # TODO Nearby Vision, GDAL library
 # from django.contrib.gis.geos import Point
@@ -407,6 +408,143 @@ def get_recommended_visions_algorithm(user):
     ).order_by('-relevance_score')
     
     return recommended
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def like_comment(request, comment_pk):
+    try:
+        comment = Comment.objects.get(pk=comment_pk)
+        user = request.user
+        
+        if user not in comment.likes.all():
+            comment.likes.add(user)
+            return Response({'message': 'Comment liked successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': 'Comment already liked'}, status=status.HTTP_200_OK)
+    
+    except Comment.DoesNotExist:
+        return Response({'error': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def unlike_comment(request, comment_pk):
+    try:
+        comment = Comment.objects.get(pk=comment_pk)
+        user = request.user
+        
+        if user in comment.likes.all():
+            comment.likes.remove(user)
+            return Response({'message': 'Comment unliked successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': 'Comment was not liked'}, status=status.HTTP_200_OK)
+    
+    except Comment.DoesNotExist:
+        return Response({'error': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def search_visions(request):
+    try:
+        search_text = request.data.get('search_text', '')
+        interest_name = request.data.get('interest')
+
+        # Create the search vector
+        search_vector = SearchVector('title', weight='A') + \
+                        SearchVector('description', weight='B') + \
+                        SearchVector('interests__name', weight='C')
+
+        # Create the search query
+        search_query = SearchQuery(search_text)
+
+        # Filter and rank the results
+        visions = Vision.objects.annotate(
+            rank=SearchRank(search_vector, search_query)
+        ).filter(rank__gte=0.01).order_by('-rank')
+
+        # Apply interest filter if provided
+        if interest_name:
+            try:
+                interest = Interest.objects.get(name=interest_name)
+                visions = visions.filter(interests=interest)
+            except Interest.DoesNotExist:
+                return Response({'error': 'Interest not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Pagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 10  # Set the number of items per page
+        result_page = paginator.paginate_queryset(visions, request)
+
+        serializer = VisionSerializer(result_page, many=True)
+
+        return paginator.get_paginated_response(serializer.data)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_vision_comments(request, vision_id):
+    try:
+        # Check if the vision exists
+        vision = Vision.objects.get(pk=vision_id)
+        
+        # Get all comments for this vision
+        comments = Comment.objects.filter(vision=vision).order_by('-created_at')
+        
+        # Set up pagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 10  # You can adjust this number as needed
+        
+        # Paginate the results
+        paginated_comments = paginator.paginate_queryset(comments, request)
+        
+        # Serialize the paginated comments
+        serializer = CommentSerializer(paginated_comments, many=True, context={'request': request})
+        
+        # Return the paginated response
+        return paginator.get_paginated_response(serializer.data)
+    
+    except Vision.DoesNotExist:
+        return Response({'error': 'Vision not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_comment_replies(request, comment_id):
+    try:
+        # Check if the parent comment exists
+        parent_comment = Comment.objects.get(pk=comment_id)
+        
+        # Get all replies for this comment
+        replies = Comment.objects.filter(parent_comment=parent_comment).order_by('created_at')
+        
+        # Set up pagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 10  # You can adjust this number as needed
+        
+        # Paginate the results
+        paginated_replies = paginator.paginate_queryset(replies, request)
+        
+        # Serialize the paginated replies
+        serializer = CommentSerializer(paginated_replies, many=True, context={'request': request})
+        
+        # Return the paginated response
+        return paginator.get_paginated_response(serializer.data)
+    
+    except Comment.DoesNotExist:
+        return Response({'error': 'Parent comment not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # TODO Nearby Visions
 # @api_view(['GET'])

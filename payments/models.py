@@ -1,5 +1,6 @@
 from django.db import models
-from users.models import User
+from users.models import Creator, User
+from videos.models import Comment
 
 class Transaction(models.Model):
     from_user = models.ForeignKey(User, related_name='transactions_made', on_delete=models.CASCADE, default=None)
@@ -16,3 +17,13 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f'Transaction of {self.amount} by {self.user.username}'
+
+class Tip(models.Model):
+    amount = models.FloatField()
+    message = models.TextField(blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tips_given')
+    creator = models.ForeignKey(Creator, on_delete=models.CASCADE, related_name='tips_received')
+    comment = models.ForeignKey(Comment, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f'Tip of {self.amount} from {self.user.username} to {self.creator.username}'

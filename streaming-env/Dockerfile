@@ -7,10 +7,10 @@ RUN apk add --no-cache python3 py3-pip supervisor gcc musl-dev python3-dev linux
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/nginx.conf.template
 
-# Create directory for your data
+# Create directory for data
 RUN mkdir -p /opt/data/hls
 
-# Copy your files
+# Copy files
 COPY async_hls_file_watcher.py /opt/data/
 COPY requirements.txt /opt/data/
 COPY .env /opt/data/
@@ -28,6 +28,7 @@ COPY supervisord.conf /etc/supervisord.conf
 # Clean up build dependencies to reduce image size
 RUN apk del gcc musl-dev python3-dev linux-headers
 
+EXPOSE 80
 EXPOSE 1935
 
 # Start Supervisor

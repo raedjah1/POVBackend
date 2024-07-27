@@ -11,3 +11,7 @@ venv
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/config.yml
 !.elasticbeanstalk/*.global.yml
+POVBackend.code-workspace
+event_test_data.json
+user_test_data.json
+vision_test_data.json

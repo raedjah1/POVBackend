@@ -36,8 +36,20 @@ class CommentSerializer(serializers.ModelSerializer):
     vision = serializers.PrimaryKeyRelatedField(queryset=Vision.objects.all())
     initial_comment = serializers.PrimaryKeyRelatedField(queryset=Comment.objects.all(), required=False, allow_null=True)
     reply_user = serializers.SlugRelatedField(slug_field='username', queryset=User.objects.all(), required=False, allow_null=True)
-    
+    isLikedByUser = serializers.SerializerMethodField()
+    likesCount = serializers.SerializerMethodField()
+
     class Meta: 
         model = Comment
-        fields = ['pk', 'user', 'likes', 'vision', 'initial_comment', 'text', 'reply_user', 'created_at']
+        fields = ['pk', 'user', 'likesCount', 'vision', 'initial_comment', 'text', 'reply_user', 'created_at']
         read_only_fields = ['user', 'created_at']
+
+    def get_isLikedByUser(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return request.user in obj.likes.all()
+        return False
+    
+    def get_likesCount(self, obj):
+        return obj.likes.count()
+    

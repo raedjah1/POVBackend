@@ -11,7 +11,7 @@ class EventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Event
-        fields = ['pk', 'creator', 'title', 'description', 'vision', 'start_time', 'is_subscribed_creator', 'is_reminded']
+        fields = ['pk', 'creator', 'title', 'description', 'vision', 'start_time', 'is_subscribed_creator', 'is_reminded', 'thumbnail']
         read_only_fields = ['creator', 'vision']
 
     def get_is_reminded(self, obj):

@@ -8,6 +8,7 @@ class Event(models.Model):
     description = models.TextField()
     vision = models.OneToOneField(Vision, on_delete=models.CASCADE, null=True, blank=True)
     start_time = models.DateTimeField()
+    thumbnail = models.URLField(max_length=500, null=True)
     remind_me_list = models.ManyToManyField(Spectator, blank=True)
 
     def __str__(self):

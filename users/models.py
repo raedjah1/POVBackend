@@ -1,6 +1,8 @@
 # users/models.py
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.postgres.search import SearchVectorField
+from django.contrib.postgres.indexes import GinIndex
 
 class User(User):
     profile_picture_url = models.CharField(
@@ -53,6 +55,10 @@ class Creator(models.Model):
     bio = models.TextField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     subscription_price_id = models.CharField(max_length=100, null=True, blank=True) 
+    search_vector = SearchVectorField(null=True)
+
+    class Meta:
+        indexes = [GinIndex(fields=['search_vector'])]
 
     def __str__(self):
         return self.user.username
