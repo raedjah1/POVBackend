@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import creator_live_status, get_popular_creators, search_creators, update_profile_picture, interest, add_or_remove_interest_from_spectator, search_interests, get_or_create_interests, update_user_details
+from .views import creator_live_status, get_all_badges, get_popular_creators, get_user_badges, search_creators, update_profile_picture, interest, add_or_remove_interest_from_spectator, search_interests, get_or_create_interests, update_user_details
 from .views_auth import check_signin_status, create_creator_account, creator_account_detail, get_creator_accounts, create_spectator_account, register_user, send_signin_code, sign_in, sign_in_apple, sign_in_facebook, sign_in_google, spectator_account_detail, get_spectator_accounts
 
 urlpatterns = [
@@ -25,4 +25,6 @@ urlpatterns = [
     path('update-user-details/', update_user_details, name='update_user_details'),
     path('creator-live-status/<int:creator_id>/', creator_live_status, name='creator_live_status'),
     path('creators/search/', search_creators, name='search_creators'),
+    path('badges/all/', get_all_badges, name='get_all_badges'),
+    path('badges/user/', get_user_badges, name='get_user_badges'),
 ]

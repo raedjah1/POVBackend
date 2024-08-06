@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import add_to_watch_history, create_live_vision, create_vision, end_live_vision, get_comment_replies, get_subscription_visions, get_trending_visions, get_vision_comments, get_visions_by_creator_category, like_comment, search_visions, unlike_comment, upload_thumbnail, update_or_get_vision_info, get_recommended_visions, get_visions_by_creator, get_visions_by_interest, like_or_dislike_vision
+from .views import add_to_watch_history, create_live_vision, create_poll, create_vision, end_live_vision, get_comment_replies, get_poll_details, get_subscription_visions, get_trending_visions, get_vision_comments, get_visions_by_creator_category, like_comment, search_visions, submit_poll_vote, unlike_comment, upload_thumbnail, update_or_get_vision_info, get_recommended_visions, get_visions_by_creator, get_visions_by_interest, like_or_dislike_vision
 
 urlpatterns = [
     path('create-vision/', create_vision, name='create_vision'),
@@ -20,5 +20,8 @@ urlpatterns = [
     path('search/', search_visions, name='search_visions'),
     path('<int:vision_id>/comments/', get_vision_comments, name='get_vision_comments'),
     path('comment-replies/<int:comment_id>/', get_comment_replies, name='get_comment_replies'),
+    path('create-poll/', create_poll, name='create_poll'),
+    path('poll-details/<int:poll_id>/', get_poll_details, name='get_poll_details'),
+    path('submit-poll-vote/', submit_poll_vote, name='submit_poll_vote'),
     # path('nearby/', get_nearby_visions, name='get_nearby_visions'),
 ]

@@ -23,6 +23,13 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from .models import Vision, Poll, PollItem, Vote
+from .serializers import PollSerializer, PollItemSerializer
+from firebase_admin import firestore
 
 # TODO Nearby Vision, GDAL library
 # from django.contrib.gis.geos import Point
@@ -546,6 +553,89 @@ def get_comment_replies(request, comment_id):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def create_poll(request):
+    vision_id = request.data.get('vision_id')
+    try:
+        vision = Vision.objects.get(id=vision_id)
+    except Vision.DoesNotExist:
+        return Response({"error": "Vision not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = PollSerializer(data=request.data)
+    if serializer.is_valid():
+        poll = serializer.save(vision=vision)
+        
+        # Write to Firestore
+        db = firestore.client()
+        db.collection('active_polls').document(str(poll.id)).set({
+            'poll_id': poll.id,
+            'question': poll.question,
+            'items': [{'id': item.id, 'text': item.text, 'votes': 0} for item in poll.items.all()],
+            'total_votes': 0,
+            'created_at': firestore.SERVER_TIMESTAMP
+        })
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_poll_details(request, poll_id):
+    try:
+        poll = Poll.objects.get(id=poll_id)
+        serializer = PollSerializer(poll)
+        return Response(serializer.data)
+    except Poll.DoesNotExist:
+        return Response({"error": "Poll not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def submit_poll_vote(request):
+    poll_item_id = request.data.get('poll_item_id')
+    user = request.user
+
+    try:
+        poll_item = PollItem.objects.select_related('poll').get(id=poll_item_id)
+    except PollItem.DoesNotExist:
+        return Response({"error": "Poll item not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Check if user has already voted on this poll
+    if Vote.objects.filter(poll_item__poll=poll_item.poll, user=user).exists():
+        return Response({"error": "You have already voted on this poll"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create the vote
+    Vote.objects.create(poll_item=poll_item, user=user)
+
+    # Increment the vote count
+    poll_item.votes += 1
+    poll_item.save()
+
+    # Update Firestore with new poll results
+    update_firestore_poll_results(poll_item.poll)
+
+    return Response({"message": "Vote submitted successfully"}, status=status.HTTP_201_CREATED)
+
+def update_firestore_poll_results(poll):
+    db = firestore.client()
+    poll_ref = db.collection('active_polls').document(str(poll.id))
+    
+    poll_items = poll.items.all()
+    total_votes = sum(item.votes for item in poll_items)
+    
+    poll_ref.update({
+        'total_votes': total_votes,
+        'items': [{
+            'id': item.id,
+            'votes': item.votes,
+            'percentage': (item.votes / total_votes * 100) if total_votes > 0 else 0
+        } for item in poll_items]
+    })
+
 # TODO Nearby Visions
 # @api_view(['GET'])
 # @authentication_classes([TokenAuthentication])
@@ -573,3 +663,4 @@ def get_comment_replies(request, comment_id):
 #         serializer = VisionSerializer(page, many=True)
 #         return paginator.get_paginated_response(serializer.data)
 #     return Response(None)
+

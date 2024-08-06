@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
-from .models import SignInCodeRequest, User, Interest, Spectator, Creator
+from .models import SignInCodeRequest, User, Interest, Spectator, Creator, Badge, UserBadge
 
 class InterestSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,3 +58,21 @@ class SignInCodeRequestSerializer(serializers.ModelSerializer):
         model = SignInCodeRequest
         fields = ['id', 'user', 'status', 'code', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+class BadgeSerializer(serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Badge
+        fields = ['id', 'name', 'description', 'image_url', 'badge_type', 'is_locked']
+
+    def get_is_locked(self, obj):
+        user = self.context['request'].user
+        return not UserBadge.objects.filter(user=user, badge=obj).exists()
+
+class UserBadgeSerializer(serializers.ModelSerializer):
+    badge = BadgeSerializer()
+
+    class Meta:
+        model = UserBadge
+        fields = ['id', 'badge', 'earned_date']

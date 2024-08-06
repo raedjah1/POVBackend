@@ -3,6 +3,8 @@ from users.models import Creator, User, Interest
 from videos.visions_manager import VisionManager
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.postgres.indexes import GinIndex
+from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 # TODO Nearby Vision, GDAL library
 # from django.contrib.gis.db import models as gis_models
@@ -57,3 +59,40 @@ class Comment(models.Model):
     @property
     def like_count(self):
         return self.likes.count()
+
+class Poll(models.Model):
+    question = models.CharField(max_length=255)
+    created_at = models.DateTimeField(default=timezone.now)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    @property
+    def total_votes(self):
+        return sum(item.votes for item in self.items.all())
+
+    def __str__(self):
+        return self.question
+
+class PollItem(models.Model):
+    poll = models.ForeignKey(Poll, related_name='items', on_delete=models.CASCADE)
+    text = models.CharField(max_length=255)
+    votes = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
+
+    @property
+    def percentage(self):
+        total = self.poll.total_votes
+        return (self.votes / total) * 100 if total > 0 else 0
+
+    def __str__(self):
+        return f"{self.text} ({self.votes} votes)"
+
+class Vote(models.Model):
+    poll_item = models.ForeignKey(PollItem, related_name='votes_cast', on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('poll_item', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} voted for {self.poll_item.text}"

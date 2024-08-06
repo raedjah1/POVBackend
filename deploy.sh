@@ -47,7 +47,7 @@ deploy_environment() {
 
 # Deploy Backend Environment
 echo "Deploying Backend Environment..."
-#deploy_environment "povbackend-test" "Python 3.9 running on 64bit Amazon Linux 2023"
+deploy_environment "povbackend-test" "Python 3.9 running on 64bit Amazon Linux 2023"
 
 # Deploy Streaming Environment
 echo "Deploying Streaming Environment..."

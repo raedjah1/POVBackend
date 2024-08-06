@@ -140,6 +140,11 @@ def register_user(request):
         return Response({
             'user_id': user.id,
             'username': user.username,
+            'profile_picture_url': user.profile_picture_url,
+            'cover_picture_url': user.cover_picture_url,
+            'is_spectator': user.is_spectator,
+            'is_creator': user.is_creator,
+            'sign_in_method': user.sign_in_method,
             'token': token.key
         }, status=status.HTTP_201_CREATED)
     except IntegrityError:
@@ -160,47 +165,15 @@ def sign_in(request):
         return Response({
             'user_id': user.id,
             'username': user.username,
+            'profile_picture_url': user.profile_picture_url,
+            'cover_picture_url': user.cover_picture_url,
+            'is_spectator': user.is_spectator,
+            'is_creator': user.is_creator,
+            'sign_in_method': user.sign_in_method,
             'token': token.key
         })
     
     return Response({'error': 'Invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
-
-# @api_view(['POST'])
-# @permission_classes([AllowAny])
-# def sign_in(request):
-#     email = request.data.get('email')
-#     password = request.data.get('password')
-    
-#     try:
-#         # Get the user by email
-#         user = User.objects.get(email="email")
-
-#         print(user)
-
-#         # Check if the sign-in method is email
-#         if user.sign_in_method != 'email':
-#             return Response({
-#                 'error': f'This account uses {user.sign_in_method} for sign in. Please use the appropriate sign-in method.'
-#             }, status=status.HTTP_400_BAD_REQUEST)
-        
-#         # Authenticate using the username and password
-#         authenticated_user = authenticate(username=user.username, password=password)
-        
-#         if authenticated_user:
-#             token, _ = Token.objects.get_or_create(user=authenticated_user)
-#             return Response({
-#                 'user_id': authenticated_user.id,
-#                 'username': authenticated_user.username,
-#                 'email': authenticated_user.email,
-#                 'token': token.key
-#             })
-#         else:
-#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
-    
-#     except User.DoesNotExist:
-#         return Response({'error': 'User with this email does not exist'}, status=status.HTTP_404_NOT_FOUND)
-#     except Exception as e:
-#         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -231,6 +204,11 @@ def sign_in_google(request):
     return Response({
         'user_id': user.id,
         'username': user.username,
+        'profile_picture_url': user.profile_picture_url,
+        'cover_picture_url': user.cover_picture_url,
+        'is_spectator': user.is_spectator,
+        'is_creator': user.is_creator,
+        'sign_in_method': user.sign_in_method,
         'email': user.email,
         'token': token.key
     }, status=status.HTTP_200_OK)
@@ -305,6 +283,11 @@ def sign_in_facebook(request):
         return Response({
             'user_id': user.id,
             'username': user.username,
+            'profile_picture_url': user.profile_picture_url,
+            'cover_picture_url': user.cover_picture_url,
+            'is_spectator': user.is_spectator,
+            'is_creator': user.is_creator,
+            'sign_in_method': user.sign_in_method,
             'email': user.email,
             'token': token.key
         }, status=status.HTTP_200_OK)
@@ -364,6 +347,11 @@ def sign_in_apple(request):
                 response_data = {
                     'user_id': user.id,
                     'username': user.username,
+                    'profile_picture_url': user.profile_picture_url,
+                    'cover_picture_url': user.cover_picture_url,
+                    'is_spectator': user.is_spectator,
+                    'is_creator': user.is_creator,
+                    'sign_in_method': user.sign_in_method,
                     'email': user.email,
                     'token': token.key
                 }

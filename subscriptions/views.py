@@ -8,8 +8,9 @@ from http import HTTPStatus
 from django.utils import timezone
 import stripe.error
 from pov_backend import settings
+from subscriptions.serializers import PromotionSerializer
 from users.serializers import CreatorSerializer
-from .models import Subscription
+from .models import Promotion, Subscription
 from users.models import Spectator, Creator
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
@@ -52,19 +53,28 @@ def subscribe(request, pk):
             spectator.stripe_customer_id = customer.id
             spectator.save()
         
+        # Check for active promotions
+        active_promotion = Promotion.objects.filter(creator=creator, is_active=True).first()
+        
         # Create a Subscription in Stripe
         try:
-            stripe_subscription = stripe.Subscription.create(
-                customer=spectator.stripe_customer_id,
-                items=[{
+            subscription_data = {
+                'customer': spectator.stripe_customer_id,
+                'items': [{
                     'price': creator.subscription_price_id,
                 }],
-                payment_behavior='default_incomplete',
-                payment_settings={'save_default_payment_method': 'on_subscription'},
-                expand=['latest_invoice.payment_intent', 'pending_setup_intent'],
-            )
+                'payment_behavior': 'default_incomplete',
+                'payment_settings': {'save_default_payment_method': 'on_subscription'},
+                'expand': ['latest_invoice.payment_intent', 'pending_setup_intent'],
+            }
             
-            # A SetupIntent is required, which means we need to set up a payment method
+            # Apply promotion if available
+            if active_promotion:
+                subscription_data['coupon'] = active_promotion.stripe_coupon_id
+
+            stripe_subscription = stripe.Subscription.create(**subscription_data)
+            
+            # Handle SetupIntent if required
             if stripe_subscription.pending_setup_intent is not None:
                 # Cancel the SetupIntent
                 stripe.SetupIntent.cancel(stripe_subscription.pending_setup_intent.id)
@@ -100,7 +110,8 @@ def subscribe(request, pk):
                 creator=creator,
                 start_date=timezone.now(),
                 stripe_subscription_id=stripe_subscription.id,
-                stripe_subscription_item_id=stripe_subscription['items']['data'][0]['id']
+                stripe_subscription_item_id=stripe_subscription['items']['data'][0]['id'],
+                promotion=active_promotion
             )
             
             # Add the creator to the spectator's subscriptions
@@ -115,7 +126,8 @@ def subscribe(request, pk):
                 'message': 'success',
                 'type': intent_type,
                 'client_secret': client_secret,
-                'subscription_id': stripe_subscription.id
+                'subscription_id': stripe_subscription.id,
+                'promotion_applied': bool(active_promotion)
             })
         except stripe.error.StripeError as e:
             return Response({'error': True, 'message': str(e)}, status=HTTPStatus.BAD_REQUEST)
@@ -333,38 +345,47 @@ def unsubscribe(request, pk):
     except Exception as e:
         return Response({'error': True, 'message': str(e)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-# For Testing Only
-# @api_view(['POST'])
-# @authentication_classes([TokenAuthentication])
-# @permission_classes([IsAuthenticated])
-# def add_card_test(request):
-#     try:
-#         spectator = Spectator.objects.get(user=request.user)
-#         token = request.data.get('card_token')
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_promotion(request):
+    try:
+        creator = Creator.objects.get(user=request.user)
+        
+        # Create a coupon in Stripe
+        coupon = stripe.Coupon.create(
+            percent_off=request.data.get('percent_off'),
+            duration=request.data.get('duration'),
+            duration_in_months=request.data.get('duration_in_months'),
+            name=request.data.get('description'),
+            metadata={'creator_id': creator.id}
+        )
+        
+        # Create a Promotion in your database
+        promotion = Promotion.objects.create(
+            creator=creator,
+            stripe_coupon_id=coupon.id,
+            description=request.data.get('description')
+        )
+        
+        serializer = PromotionSerializer(promotion)
+        return Response({'message': 'Promotion created successfully', 'data': serializer.data}, status=HTTPStatus.CREATED)
+    except Exception as e:
+        return Response({'error': True, 'message': str(e)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-#         if not token:
-#             return Response({'error': 'Token is required'}, status=HTTPStatus.BAD_REQUEST)
-
-#         # Create or retrieve Stripe customer
-#         if not spectator.stripe_customer_id:
-#             customer = stripe.Customer.create(
-#                 email=spectator.user.email,
-#                 source=token  # This adds the card to the customer
-#             )
-#             spectator.stripe_customer_id = customer.id
-#             spectator.save()
-#         else:
-#             customer = stripe.Customer.retrieve(spectator.stripe_customer_id)
-#             stripe.Customer.create_source(
-#                 customer.id,
-#                 source=token
-#             )
-
-#         return Response({
-#             'message': 'Card added successfully',
-#             'customer_id': customer.id
-#         }, status=HTTPStatus.OK)
-#     except stripe.error.StripeError as e:
-#         return Response({'error': True, 'message': str(e)}, status=HTTPStatus.BAD_REQUEST)
-#     except Exception as e:
-#         return Response({'error': True, 'message': str(e)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_promotion(request, promotion_id):
+    try:
+        promotion = Promotion.objects.get(id=promotion_id, creator__user=request.user)
+        
+        # Delete the coupon in Stripe
+        stripe.Coupon.delete(promotion.stripe_coupon_id)
+        
+        # Delete the Promotion from your database
+        promotion.delete()
+        
+        return Response({'message': 'Promotion deleted successfully'}, status=HTTPStatus.OK)
+    except Promotion.DoesNotExist:
+        return Response({'error': True, 'message': 'Promotion not found'}, status=HTTPStatus.NOT_FOUND)
+    except Exception as e:
+        return Response({'error': True, 'message': str(e)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)

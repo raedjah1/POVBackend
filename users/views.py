@@ -7,14 +7,15 @@ from http import HTTPStatus
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from videos.models import Vision
 from videos.serializers import VisionSerializer
-from .models import User, Interest, Creator
-from .serializers import InterestSerializer, CreatorSerializer, UserSerializer
+from .models import User, Interest, Creator, Badge, UserBadge
+from .serializers import BadgeSerializer, UserBadgeSerializer, InterestSerializer, CreatorSerializer, UserSerializer
 import cloudinary.uploader
 from django.db.models import Sum, F, ExpressionWrapper, FloatField
 from django.db.models.functions import Coalesce
 from rest_framework.authentication import TokenAuthentication
 from rest_framework import status
 from django.contrib.postgres.search import TrigramSimilarity
+from rest_framework.response import Response
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -211,6 +212,20 @@ def search_creators(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_badges(request):
+    badges = Badge.objects.all()
+    serializer = BadgeSerializer(badges, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_badges(request):
+    user_badges = UserBadge.objects.filter(user=request.user)
+    serializer = UserBadgeSerializer(user_badges, many=True)
+    return Response(serializer.data)
 
 # @api_view(['GET'])
 # @authentication_classes([TokenAuthentication])

@@ -3,6 +3,8 @@ from rest_framework import serializers
 from .models import Vision, Comment
 from users.models import Interest, User
 from users.serializers import UserSerializer, CreatorSerializer
+from rest_framework import serializers
+from .models import Poll, PollItem, Vote
 
 class VisionSerializer(serializers.ModelSerializer):
     interests = serializers.PrimaryKeyRelatedField(queryset=Interest.objects.all(), many=True)
@@ -52,4 +54,34 @@ class CommentSerializer(serializers.ModelSerializer):
     
     def get_likesCount(self, obj):
         return obj.likes.count()
-    
+
+class PollItemSerializer(serializers.ModelSerializer):
+    percentage = serializers.FloatField(read_only=True)
+    selected = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PollItem
+        fields = ['id', 'text', 'votes', 'percentage', 'selected']
+
+    def get_selected(self, obj):
+        user = self.context['request'].user
+        return Vote.objects.filter(poll_item=obj, user=user).exists()
+
+class PollSerializer(serializers.ModelSerializer):
+    items = PollItemSerializer(many=True, read_only=True)
+    total_votes = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Poll
+        fields = ['id', 'question', 'items', 'total_votes', 'created_at', 'ends_at', 'is_active']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        items = representation['items']
+        total_votes = sum(item['votes'] for item in items)
+        
+        for item in items:
+            item['percentage'] = (item['votes'] / total_votes * 100) if total_votes > 0 else 0
+
+        representation['total_votes'] = total_votes
+        return representation

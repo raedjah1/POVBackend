@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import check_subscription_status, get_subscribed_creators, subscribe, get_subscriptions, unsubscribe, update_creator_price
+from .views import check_subscription_status, create_promotion, delete_promotion, get_subscribed_creators, subscribe, get_subscriptions, unsubscribe, update_creator_price
 
 urlpatterns = [
     path('subscribe/<int:pk>/', subscribe, name='subscribe'),
@@ -8,5 +8,6 @@ urlpatterns = [
     path('subscribed-creators/', get_subscribed_creators, name='get_subscribed_creators'),
     path('subscription-status/<int:creator_id>/', check_subscription_status, name='check_subscription_status'),
     path('unsubscribe/<int:pk>/', unsubscribe, name='unsubscribe'),
-    # path('add-card-test/', add_card_test, name='add_card_test'), # For Testing Only
+    path('create-promotion/', create_promotion, name='create_promotion'),
+    path('delete-promotion/<int:promotion_id>/', delete_promotion, name='delete_promotion')
 ]

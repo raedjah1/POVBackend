@@ -79,3 +79,31 @@ class SignInCodeRequest(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+class BadgeType(models.TextChoices):
+    COMMENT = 'CM', 'Comment'
+    SUPER_FAN = 'SF', 'Super Fan'
+    SUPPORTER = 'SP', 'Supporter'
+    EARLY_BIRD = 'EB', 'Early Bird'
+    COMMENT_KING = 'CK', 'Comment King'
+    TOP_SUPPORTER = 'TS', 'Top Supporter'
+
+class Badge(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    image_url = models.URLField()
+    badge_type = models.CharField(max_length=2, choices=BadgeType.choices)
+    
+    def __str__(self):
+        return self.name
+
+class UserBadge(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='badges')
+    badge = models.ForeignKey(Badge, on_delete=models.CASCADE)
+    earned_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'badge')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.badge.name}"
