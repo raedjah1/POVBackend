@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import json
 from pathlib import Path
 import os
 import firebase_admin
@@ -18,8 +19,11 @@ from firebase_admin import credentials
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Parse the JSON string from the config var
+cred_dict = json.loads(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
+
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
+cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
 
 # Quick-start development settings - unsuitable for production
