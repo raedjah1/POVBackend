@@ -138,34 +138,24 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-    ],
-    'DEFAULT_AUTHENTICATION_CLASSES': [
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-    ],
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
 }
-
-CSRF_TRUSTED_ORIGINS = [
-    'https://3eb7-50-144-69-94.ngrok-free.app',
-    'http://0.0.0.0'
-]
 
 # API
 NGINX_API_KEY = '8f4a9c2e7b6d1f3a5e0d9c8b7f2a1e6d'
-
-if DEBUG:
-    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
-    RTMP_HOST = 'rtmp://localhost:1935/live'
-else:
-    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
-    RTMP_HOST = 'rtmp://3eb7-50-144-69-94.ngrok-free.app/live'
