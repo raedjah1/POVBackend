@@ -18,6 +18,8 @@ from django.contrib import admin
 from django.urls import path
 from django.urls import path, include
 from django.http import JsonResponse
+from django.conf import settings
+from django.conf.urls.static import static
 
 def health_check(request):
     return JsonResponse({"status": "running"}, status=200)
@@ -31,4 +33,4 @@ urlpatterns = [
     path('events/', include('events.urls')),
     path('subscriptions/', include('subscriptions.urls')),
     path('payments/', include('payments.urls')),
-]
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

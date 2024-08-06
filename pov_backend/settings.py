@@ -10,21 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-import json
 from pathlib import Path
 import os
-import firebase_admin
-from firebase_admin import credentials
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Parse the JSON string from the config var
-cred_dict = json.loads(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
-
-# Initialize Firebase Admin SDK
-cred = credentials.Certificate(cred_dict)
-firebase_admin.initialize_app(cred)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -33,7 +23,7 @@ firebase_admin.initialize_app(cred)
 SECRET_KEY = 'django-insecure--=@&1z!_qy2p)+zj2v8a2!d8bt)i33z%zwnd%kmb4b^7-t7%e1'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
@@ -139,6 +129,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -146,26 +137,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-    ],
-    'DEFAULT_AUTHENTICATION_CLASSES': [
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-    ],
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
 }
-
-CSRF_TRUSTED_ORIGINS = [
-    'https://3eb7-50-144-69-94.ngrok-free.app',
-    'http://0.0.0.0'
-]
 
 # API
 NGINX_API_KEY = '8f4a9c2e7b6d1f3a5e0d9c8b7f2a1e6d'
-
-if DEBUG:
-    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
-    RTMP_HOST = 'rtmp://localhost:1935/live'
-else:
-    FILE_HOST = 'https://f002.backblazeb2.com/file/coinsniper-api-test'
-    RTMP_HOST = 'rtmp://3eb7-50-144-69-94.ngrok-free.app/live'
