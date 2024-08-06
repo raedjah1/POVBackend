@@ -1,0 +1,17 @@
+services:
+  povstreaming:
+    image: mnm967/povstreaming:latest
+    ports:
+      - "80:80"
+      - "1935:1935"
+    volumes:
+      - /var/app/current:/usr/src/app
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /aws/elasticbeanstalk/povstreaming
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: povstreaming
+
+volumes:
+  app-data:

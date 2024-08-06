@@ -1,0 +1,19 @@
+*.pyc
+__pycache__/
+db.sqlite3
+db.json
+/media
+/staticfiles
+.env
+venv
+.venv
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/config.yml
+!.elasticbeanstalk/*.global.yml
+POVBackend.code-workspace
+event_test_data.json
+user_test_data.json
+vision_test_data.json
+pov-test-a1da9-firebase-adminsdk-rsud5-d515086cba.json
