@@ -29,7 +29,23 @@ from rest_framework import status
 from django.db import transaction
 from .models import Vision, Poll, PollItem, Vote
 from .serializers import PollSerializer, PollItemSerializer
-from firebase_admin import firestore
+from firebase_admin import firestore, credentials
+import json
+
+try:
+    # Parse the JSON string from the config var if it exists
+    google_creds = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    
+    if google_creds:
+        cred_dict = json.loads(google_creds)
+
+        # Initialize Firebase Admin SDK
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
+    else:
+        print("GOOGLE_APPLICATION_CREDENTIALS environment variable not found.")
+except Exception as e:
+    print(f"An error occurred while initializing Firebase: {str(e)}")    
 
 # TODO Nearby Vision, GDAL library
 # from django.contrib.gis.geos import Point
