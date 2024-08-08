@@ -84,16 +84,41 @@ def interest(request):
 @permission_classes([IsAuthenticated])
 def add_or_remove_interest_from_spectator(request):
     try:
+        print("Received headers:", request.headers)
+        print("User authenticated:", request.user.is_authenticated)
+        print("Authenticated user:", request.user)
+
+        add_interests = request.data.get('add_interests', [])
+        remove_interests = request.data.get('remove_interests', [])
+
         user = User.objects.get(pk=request.user.pk)
         spectator = user.spectator
-        spectator.interests.clear()
-        for interest_name in request.data['interests']:
-            interest = Interest.objects.get(name=interest_name)
-            spectator.interests.add(interest)
+
+        # Remove specified interests
+        for interest_name in remove_interests:
+            try:
+                interest = Interest.objects.get(name=interest_name)
+                spectator.interests.remove(interest)
+                print(f"Removed interest {interest_name} from user {user.pk}")
+            except Interest.DoesNotExist:
+                print(f"Interest '{interest_name}' does not exist")
+                return Response({'error': True, 'message': f'Interest "{interest_name}" does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Add specified interests
+        for interest_name in add_interests:
+            try:
+                interest = Interest.objects.get(name=interest_name)
+                spectator.interests.add(interest)
+                print(f"Added interest {interest_name} to user {user.pk}")
+            except Interest.DoesNotExist:
+                print(f"Interest '{interest_name}' does not exist")
+                return Response({'error': True, 'message': f'Interest "{interest_name}" does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+
         spectator.save()
-        return Response({'message': 'Interests added to spectator successfully!'})
+        return Response({'message': 'Interests updated successfully!'})
     except Exception as e:
-        return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+        print("Error:", str(e))
+        return Response({'error': True, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -114,20 +139,34 @@ def search_interests(request):
         return Response({
             'message': 'Interests found',
             'data': InterestSerializer(interests, many=True).data
-        }, status=status.HTTP_OK)
+        }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'message': str(e), 'error': True}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def get_or_create_interests(request):
     try:
-        interests = request.data['interests']
+        interests = request.data.get('interests', [])
+        
+        if not interests:
+            return Response({'error': True, 'message': 'No interests provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        interest_objects = []
         for interest_name in interests:
-            Interest.objects.get_or_create(name=interest_name)
-        interest_data = Interest.objects.filter(name__in=interests)
-        return Response({'interests': InterestSerializer(interest_data, many=True).data})
+            interest, created = Interest.objects.get_or_create(name=interest_name)
+            interest_objects.append({
+                'id': interest.id,
+                'name': interest.name,
+                'created': created
+            })
+
+        return Response({
+            'interests': interest_objects
+        }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': True, 'message': 'There was an error'}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+        return Response({'error': True, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])

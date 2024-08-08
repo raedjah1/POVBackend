@@ -114,15 +114,25 @@ def register_user(request):
     first_name = request.data.get('firstname')
     last_name = request.data.get('lastname')
     password = request.data.get('password')
+    password_confirmation = request.data.get('password_confirmation')
 
     print([username, email, first_name, last_name, password])
 
-    if not all([username, email, first_name, last_name, password]):
+    # Check if all fields are provided
+    if not all([username, email, first_name, last_name, password, password_confirmation]):
         return Response({'error': 'All fields are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if passwords match
+    if password != password_confirmation:
+        return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Check if email already exists
     if User.objects.filter(email=email).exists():
         return Response({'error': 'Email address already in use'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if username already exists
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.create_user(
@@ -152,7 +162,7 @@ def register_user(request):
     except Exception as e:
         print(e)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def sign_in(request):
@@ -162,17 +172,18 @@ def sign_in(request):
 
     if user:
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({
+        response_data = {
             'user_id': user.id,
             'username': user.username,
-            'profile_picture_url': user.profile_picture_url,
-            'cover_picture_url': user.cover_picture_url,
-            'is_spectator': user.is_spectator,
-            'is_creator': user.is_creator,
-            'sign_in_method': user.sign_in_method,
-            'token': token.key
-        })
-    
+            'token': token.key,
+        }
+        # Optionally include other fields if they exist
+        optional_fields = ['profile_picture_url', 'cover_picture_url', 'is_spectator', 'is_creator', 'sign_in_method']
+        for field in optional_fields:
+            response_data[field] = getattr(user, field, None)
+
+        return Response(response_data)
+
     return Response({'error': 'Invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
